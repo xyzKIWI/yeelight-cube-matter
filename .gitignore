@@ -1,0 +1,27 @@
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+# Matter 憑證與本機狀態絕不進 repo
+.matter-yeelight/
+shell-0*/
+cube_state.json
+cal_watch.json
+*.env
+
+# Local credentials, state, logs and private exports
+.env
+.env.*
+!.env.example
+*.log
+*.bundle
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+*.db
+calendar.env
+private/
+
+.venv/
