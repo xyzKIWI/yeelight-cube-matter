@@ -14,10 +14,22 @@
 import argparse
 import json
 import os
+from pathlib import Path
+from urllib.parse import urlsplit
 import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+ASSETS = Path(__file__).resolve().parent / "assets"
+ICON_VERSION = "20261125a"
+MANIFEST = {
+    "id": "/", "name": "Cube 光盒", "short_name": "Cube 光盒",
+    "lang": "zh-Hant", "start_url": "/", "scope": "/", "display": "standalone",
+    "background_color": "#0f172a", "theme_color": "#0f172a",
+    "icons": [{"src": f"/assets/icon-{n}.png?v={ICON_VERSION}", "sizes": f"{n}x{n}",
+               "type": "image/png", "purpose": "any maskable"} for n in (192, 512)],
+}
 
 DAEMON = os.environ.get("CUBE_DAEMON", "http://127.0.0.1:8766")
 CAL_STATE = os.environ.get("CAL_STATE", os.path.expanduser("~/.matter-yeelight/cal_watch.json"))
@@ -54,6 +66,19 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        route = urlsplit(self.path).path
+        if route == "/manifest.webmanifest":
+            return self._send(200, json.dumps(MANIFEST, ensure_ascii=False), "application/manifest+json; charset=utf-8")
+        icons = {f"/assets/icon-{n}.png": (f"icon-{n}.png", "image/png") for n in (32, 180, 192, 512, 1024)}
+        icons["/assets/icon.svg"] = ("icon.svg", "image/svg+xml")
+        icons["/apple-touch-icon.png"] = ("icon-180.png", "image/png")
+        icons["/favicon.ico"] = ("icon-32.png", "image/png")
+        if route in icons:
+            filename, mime = icons[route]
+            try:
+                return self._send(200, (ASSETS / filename).read_bytes(), mime)
+            except OSError:
+                return self._json(404, {"error": "icon not found"})
         if self.path in ("/", "/index.html"):
             return self._send(200, PAGE, "text/html; charset=utf-8")
         if self.path == "/api/status":
@@ -92,9 +117,15 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = r"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="方塊燈">
+<meta name="apple-mobile-web-app-title" content="Cube 光盒">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Cube 光盒：點陣時鐘、文字、氛圍與日常提醒。">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icon-180.png?v=20261125a">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png?v=20261125a">
+<link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0F172A">
-<title>方塊燈</title>
+<title>Cube 光盒</title>
 <style>
 :root{--bg:#F4F6FA;--card:#FFFFFF;--muted:#EEF1F6;--fg:#0F172A;--dim:#475569;--line:#D9DEE7;
  --acc:#16A34A;--on-acc:#FFFFFF;--warn:#DC2626;--info:#2563EB;--r:16px}
@@ -104,7 +135,12 @@ PAGE = r"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif}
 header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:10px;
  padding:calc(10px + env(safe-area-inset-top)) 16px 10px}
-header h1{font-size:20px;margin:0;flex:1}
+header h1{font-size:18px;margin:0;flex:1;letter-spacing:-.4px}
+.brand{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.brand img{width:38px;height:38px;border-radius:10px;flex:none}
+.brand small{display:block;font-size:10px;font-weight:500;color:var(--dim);letter-spacing:.7px;margin-top:1px}
+@media(display-mode:standalone){html{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:none}input,textarea{-webkit-user-select:text;user-select:text}}
+.install-note{font-size:13px;line-height:1.7;color:var(--dim)}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--dim)}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--dim)}
 .dot.ok{background:var(--acc)}.dot.bad{background:var(--warn)}
@@ -179,7 +215,7 @@ nav svg{width:24px;height:24px}
 .bad{color:var(--warn)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
-<header><h1>方塊燈</h1>
+<header><div class="brand"><img src="/assets/icon-180.png?v=20261125a" alt="" width="38" height="38"><h1>Cube 光盒<small>點陣・光・日常</small></h1></div>
 <span class="chip" id="conn"><span class="dot" id="cdot"></span><span id="ctxt">讀取中</span></span>
 <button class="toggle" id="pw" aria-label="電源" onclick="power()"></button>
 <button class="ghost" aria-label="設定" onclick="sheet(true)" style="min-width:48px;padding:0">
@@ -229,13 +265,14 @@ nav svg{width:24px;height:24px}
   <div class="info"><div class="hint">尚未套用</div><div class="big" id="preTitle">—</div>
   <div class="hint" id="preSub"></div>
   <button class="pri" id="applyBtn" style="margin-top:12px;width:100%" onclick="apply()">套用到燈</button></div></div></section>
- <section data-p="clock"><h2>時鐘數字顏色</h2><div class="pal" id="pal"></div>
+ <section data-p="clock"><h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放窄字可顯示 HH:MM，直放數字置中。</p><h2 style="margin-top:14px">時鐘數字顏色</h2><div class="pal" id="pal"></div>
   <h2 style="margin-top:14px">自訂</h2><div class="row"><input type="color" id="cc1" value="#00c8ff" aria-label="小時顏色" onchange="customClock()"><span class="hint">小時</span>
   <input type="color" id="cc2" value="#ff40a0" aria-label="分鐘顏色" onchange="customClock()"><span class="hint">分鐘</span></div>
   <p class="hint">夜間建議琥珀或夜間紅，最不刺眼。</p>
   <h2 style="margin-top:14px">顏色變化</h2><div class="cfx" data-cfx></div><p class="hint" data-cfxhint></p></section>
  <section data-p="text">
-  <h2>文字</h2><input type="text" id="txt" maxlength="60" autocapitalize="characters" placeholder="英文、數字、♥" oninput="onText()">
+  <h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放窄字一頁最多 5 字；直放維持每塊一字。</p>
+  <h2 style="margin-top:14px">文字</h2><input type="text" id="txt" maxlength="60" autocapitalize="characters" placeholder="英文、數字、♥" oninput="onText()">
   <p class="hint" id="txtHint">支援英文、數字、♥ 與 ! ? - . : + &lt; &gt; /</p>
   <div class="hint" style="margin-top:8px">用過的文字（點一下帶入，右上 ✕ 刪除）</div><div class="chips" id="hist"></div>
   <h2>效果</h2><div class="seg" id="fxseg"><button data-v="scroll">捲動</button><button data-v="still">靜止</button><button data-v="blink">閃爍</button><button data-v="scrollblink">捲動＋閃爍</button></div>
@@ -276,12 +313,13 @@ nav svg{width:24px;height:24px}
  <section><h2>行事曆提醒</h2><p class="hint" style="margin-top:0">依行事曆服務設定，預設在事件開始前 10 分鐘，插播紅色「NEXT 時:分」。點陣停止時不插播。</p>
   <div class="hint" id="cst"></div><button style="margin-top:10px" onclick="api('/api/alert-test',{})">測試提醒（1 分鐘）</button></section>
  <section><h2>Home Assistant 通知</h2>
-  <p class="hint" style="margin-top:0">洗衣機／洗衣塔／Styler 完成與錯誤、冰箱門 2 分鐘、寵物缺水缺糧、NAS 異常、回家歡迎。設定在 HA 自動化（名稱以「方塊燈：」開頭）。</p>
+  <p class="hint" style="margin-top:0">可由 Home Assistant 自動化傳入完成提醒或異常通知；需先設定通知整合。</p>
   <button onclick="api('/api/notify',{text:'WASH DONE',seconds:20})">測試 WASH DONE（20 秒）</button></section>
 </div>
 </main>
 <div class="sheet" id="sheet" onclick="if(event.target===this)sheet(false)"><div class="panel">
- <h2>擺放方向</h2><select id="ori" style="width:100%" onchange="mode({orient:this.value})">
+ <h2>加入主畫面</h2><p class="install-note">iPhone：以 Safari 開啟，按「分享 → 加入主畫面」，名稱可用「Cube 光盒」。若已有舊圖示，請移除舊捷徑後重新加入。需連上可存取控制主機的網路。</p>
+ <h2 style="margin-top:18px">擺放方向</h2><select id="ori" style="width:100%" onchange="mode({orient:this.value})">
   <option value="up">直放（底座在下）</option><option value="left">橫放（底座在左）</option>
   <option value="right">橫放（底座在右）</option><option value="down">倒放</option></select>
  <p class="hint">手機需與控制主機位於可互通的區域網路。</p>
@@ -301,7 +339,7 @@ const SW=['#ff0000','#ff8000','#ffd000','#00e060','#00c8ff','#2050ff','#8b00ff',
 let S=null, dragging=false, draft={mode:'clock'}, conTab='clock', schedLoaded=false, pending=null, playTimer=null;
 const CLOCK_PAL=[['預設','',''],['暖白','#ffd8a0',''],['琥珀','#ff8a00',''],['夜間紅','#ff2a00',''],
  ['冰藍','#40c8ff',''],['薄荷','#30ffa0',''],['薰衣草','#a070ff',''],['櫻花','#ff5aa0',''],
- ['青＋粉','#00e0ff','#ff40a0'],['金＋白','#ffb000','#ffffff'],['綠＋黃','#30e060','#ffd040'],['紫＋青','#b060ff','#00e0c0']];
+ ['青＋粉','#00e0ff','#ff40a0'],['金＋白','#ffb000','#ffffff'],['綠＋黃','#30e060','#ffd040'],['紫＋青','#b060ff','#00e0c0'],['蜜糖暖光','#ffb74c','#ffdc5a'],['北歐冰川','#88c0d0','#a3be8c'],['德古拉','#bd93f9','#ff79c6'],['奶霜粉彩','#cba6f7','#94e2d5'],['復古電光','#ff2896','#00e1ff']];
 function renderPal(){$('pal').innerHTML=CLOCK_PAL.map(([n,a,b],i)=>{const h=a||'#ff8c00',m=b||a||'#00aaff';
   const on=(draft.color||'')===a&&(draft.color2||'')===b;
   return `<button class="${on?'on':''}" data-i="${i}" aria-pressed="${on}" aria-label="時鐘顏色 ${n}"><span class="dg"><span style="color:${h}">1</span><span style="color:${m}">2</span></span>${n}</button>`;}).join('');
@@ -309,13 +347,13 @@ function renderPal(){$('pal').innerHTML=CLOCK_PAL.map(([n,a,b],i)=>{const h=a||'
 const RB='#ff0000,#ffd000,#00e060,#00c8ff,#8b00ff,#ff40a0';
 const CFX=[['fixed','固定',null],['flow','彩虹流動','linear-gradient(180deg,'+RB+')'],['diagonal','斜向彩虹','linear-gradient(135deg,'+RB+')'],
  ['sunset','夕陽漸層','linear-gradient(135deg,#ff4600,#ff006e,#9600ff)'],['ocean','海洋漸層','linear-gradient(135deg,#00ffbe,#0082ff,#461eff)'],
- ['pulse','呼吸',null],['sparkle','閃亮',null]];
+ ['pulse','呼吸',null],['sparkle','閃亮',null],['honey','蜜糖暖光','linear-gradient(135deg,#ff9623,#ffdc5a)'],['nord','北歐冰川','linear-gradient(135deg,#8fbcbb,#88c0d0,#81a1c1)'],['dracula','德古拉霓虹','linear-gradient(135deg,#bd93f9,#ff79c6,#8be9fd)'],['catppuccin','奶霜粉彩','linear-gradient(135deg,#cba6f7,#f5c2e7,#fab387,#94e2d5)'],['synthwave','復古電光','linear-gradient(135deg,#ff2896,#8246ff,#00e1ff)']];
 function renderCfx(){const base=draft.color||'#ff8c00',cur=draft.colorFx||'fixed';
  document.querySelectorAll('[data-cfx]').forEach(box=>{box.innerHTML=CFX.map(([k,n,g])=>{
   const bg=g||(k==='pulse'?`radial-gradient(circle,${base},#05070c)`:k==='sparkle'?`radial-gradient(circle at 30% 40%,#fff 2px,transparent 3px),radial-gradient(circle at 70% 65%,#fff 2px,transparent 3px),${base}`:(draft.color||'linear-gradient(90deg,'+RB+')'));
   return `<button class="${k===cur?'on':''}" data-k="${k}" aria-pressed="${k===cur}" aria-label="顏色變化 ${n}"><span class="sw2" style="background:${bg}"></span>${n}</button>`;}).join('');
   box.querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.colorFx=b.dataset.k;renderCfx();preview();});});
- const h=['flow','diagonal','sunset','ocean'].includes(cur)?'這個效果會取代上面選的顏色；燈上每 0.3 秒換一次色。':cur==='fixed'?'':'用上面選的顏色'+(draft.color?'':'（沒選就用橘色）')+'變化。';
+ const h=['flow','diagonal','sunset','ocean','honey','nord','dracula','catppuccin','synthwave'].includes(cur)?'這個效果會取代上面選的顏色；燈上每 0.3 秒換一次色。':cur==='fixed'?'':'用上面選的顏色'+(draft.color?'':'（沒選就用橘色）')+'變化。';
  document.querySelectorAll('[data-cfxhint]').forEach(p=>p.textContent=h);}
 const FLASH=[['綠','#00ff80'],['紅','#ff2020'],['橘','#ff8000'],['黃','#ffd000'],['藍','#2080ff'],['紫','#a040ff'],['粉','#ff40a0'],['白','#ffffff']];
 let flashSel='#00ff80';try{flashSel=localStorage.getItem('cubeFlash')||flashSel;}catch(e){}
@@ -373,7 +411,9 @@ function openCon(k){conTab=k;document.querySelectorAll('#cseg button').forEach(x
  if(k==='image')draft={mode:'image',image:null};
  if(k==='mood')draft={mode:'effect',effect:'rainbow'};
  $('pv').hidden=k==='timer';if(k==='timer'){$('tQuick').innerHTML=[1,3,5,10,15,25].map(m=>`<button onclick="timerStart(${m*60})">${m} 分</button>`).join('');renderFlash();tickTimer();return;}
- syncFxSeg();renderCfx();preview();}
+ draft.font=(S&&S.font)||'classic';syncFont();syncFxSeg();renderCfx();preview();}
+function syncFont(){document.querySelectorAll('[data-font]').forEach(b=>b.classList.toggle('on',b.dataset.font===(draft.font||'classic')));}
+document.querySelectorAll('[data-font]').forEach(b=>b.onclick=()=>{draft.font=b.dataset.font;syncFont();preview();});
 document.querySelectorAll('#fxseg button').forEach(b=>b.onclick=()=>{draft.textFx=b.dataset.v;syncFxSeg();preview();});
 function syncFxSeg(){document.querySelectorAll('#fxseg button').forEach(x=>x.classList.toggle('on',x.dataset.v===(draft.textFx||'scroll')));
  $('spdBox').hidden=draft.textFx==='blink'||draft.textFx==='still';}
@@ -382,7 +422,7 @@ function syncFxSeg(){document.querySelectorAll('#fxseg button').forEach(x=>x.cla
 function setText(t){$('txt').value=t;onText();}
 function onText(){const raw=$('txt').value.toUpperCase();const ok=S?S.supportedChars:'';
  const bad=[...new Set([...raw].filter(c=>ok&&!ok.includes(c)))];
- $('txtHint').innerHTML=bad.length?'<span class="bad">不支援：'+bad.join(' ')+'（請改掉才能套用）</span>':(raw?'實際顯示：'+raw:'請輸入文字');
+ $('txtHint').classList.toggle('bad',bad.length>0);$('txtHint').textContent=bad.length?'不支援：'+bad.join(' ')+'（請改掉才能套用）':(raw?'實際顯示：'+raw:'請輸入文字');
  draft.text=raw;$('applyBtn').disabled=!raw||bad.length>0;if(!bad.length&&raw)preview();}
 
 // ---- 預覽：向常駐程式要畫面，在手機上播放，不送燈 ----

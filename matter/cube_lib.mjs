@@ -41,6 +41,7 @@ const FONT = {
     ">": ["01000", "00100", "00010", "00100", "01000"], "/": ["00001", "00010", "00100", "01000", "10000"],
     "♥": ["01010", "11111", "11111", "01110", "00100"],
 };
+export const COMPACT_FONT = Object.fromEntries(Object.entries({"0": "111/101/101/101/111", "1": "010/110/010/010/111", "2": "111/001/111/100/111", "3": "111/001/111/001/111", "4": "101/101/111/001/001", "5": "111/100/111/001/111", "6": "111/100/111/101/111", "7": "111/001/010/010/010", "8": "111/101/111/101/111", "9": "111/101/111/001/111", "A": "010/101/111/101/101", "B": "110/101/110/101/110", "C": "111/100/100/100/111", "D": "110/101/101/101/110", "E": "111/100/110/100/111", "F": "111/100/110/100/100", "G": "111/100/101/101/111", "H": "101/101/111/101/101", "I": "111/010/010/010/111", "J": "001/001/001/101/111", "K": "101/101/110/101/101", "L": "100/100/100/100/111", "M": "101/111/111/101/101", "N": "101/111/111/111/101", "O": "111/101/101/101/111", "P": "111/101/111/100/100", "Q": "111/101/101/111/001", "R": "110/101/110/101/101", "S": "111/100/111/001/111", "T": "111/010/010/010/010", "U": "101/101/101/101/111", "V": "101/101/101/101/010", "W": "101/101/111/111/101", "X": "101/101/010/101/101", "Y": "101/101/010/010/010", "Z": "111/001/010/100/111", " ": "000/000/000/000/000", "!": "010/010/010/000/010", "?": "111/001/010/000/010", "-": "000/000/111/000/000", ".": "000/000/000/000/010", ":": "0/1/0/1/0", "+": "000/010/111/010/000", "<": "001/010/100/010/001", ">": "100/010/001/010/100", "/": "001/001/010/100/100", "\u2665": "101/111/111/010/000"}).map(([k,v])=>[k,v.split("/")]));
 // 天氣圖示（5x5）與顏色
 export const WEATHER_ICONS = {
     sun: { rows: ["10101", "01110", "11111", "01110", "10101"], color: [255, 200, 0] },
@@ -69,7 +70,10 @@ export function kelvinToRgb(k) {
 export const dim = ([r, g, b], f) => [Math.round(r * f), Math.round(g * f), Math.round(b * f)];
 
 /** 依擺放方向建立繪圖器。眼睛看到的畫布 canvas[ly][lx]，ly=0 最上、lx=0 最左。 */
-export function renderer(orient = "up") {
+export function renderer(orient = "up", font = "classic") {
+    if (!["classic", "compact"].includes(font)) throw new Error("font 只能是 classic/compact");
+    const compact = font === "compact";
+    const glyph = ch => (compact ? COMPACT_FONT : FONT)[ch.toUpperCase()] ?? (compact ? COMPACT_FONT : FONT)["?"];
     if (!ORIENTS.includes(orient)) throw new Error(`方向只能是 ${ORIENTS.join("/")}，收到 ${orient}`);
     const wide = orient === "left" || orient === "right";
     const LW = wide ? H : W, LH = wide ? W : H;
@@ -87,6 +91,11 @@ export function renderer(orient = "up") {
         if (y < 0 || y >= LH) return;
         [...row].forEach((bit, dx) => { const x = left + dx; if (bit === "1" && x >= 0 && x < LW) canvas[y][x] = color; });
     });
+    const drawLine = (canvas, text, colors) => {
+        const widths = [...text].map(ch => glyph(ch)[0].length);
+        let x = Math.floor((LW - widths.reduce((a,b)=>a+b,0) - widths.length + 1) / 2);
+        [...text].forEach((ch,i)=>{draw(canvas,ch,x,0,colors[i]);x+=widths[i]+1;});
+    };
     const encode = canvas => {
         const out = new Uint8Array(MODULES * 25 * 4);
         for (let ly = 0; ly < LH; ly++) for (let lx = 0; lx < LW; lx++) {
@@ -103,35 +112,39 @@ export function renderer(orient = "up") {
         const c = blank();
         const m = color2 ?? color;
         const colors = color ? [color, color, m, m] : [[255, 140, 0], [255, 140, 0], [0, 170, 255], [0, 170, 255]]; // 預設 時：橘，分：藍
-        [...t].forEach((d, i) => draw(c, d, wide ? i * 5 : 0, wide ? 0 : i * 5, colors[i]));
+        if (compact && wide) drawLine(c, t.slice(0,2)+":"+t.slice(2), [colors[0],colors[1],colors[1],colors[2],colors[3]]);
+        else [...t].forEach((d, i) => draw(c, d, wide ? i * 5 : compact ? 1 : 0, wide ? 0 : i * 5, colors[i]));
         return c;
     };
     // 四個字元直接排四格（倒數 MMSS 用）；colors＝每格一色
     const digits = (str, colors) => {
         const c = blank();
-        [...str].slice(0, 4).forEach((d, i) => draw(c, d, wide ? i * 5 : 0, wide ? 0 : i * 5, colors[i]));
+        [...str].slice(0, 4).forEach((d, i) => draw(c, d, wide ? i * 5 + (compact ? 1 : 0) : compact ? 1 : 0, wide ? 0 : i * 5, colors[i]));
         return c;
     };
     const marquee = (text, color = null) => {
         const chars = [...text];
         const span = wide ? LW : LH;
-        return Array.from({ length: chars.length * 6 + span }, (_, off) => { // 每字 5 格＋1 格間距，尾端留一屏空白
+        const stride = compact && wide ? 4 : 6;
+        return Array.from({ length: chars.length * stride + span }, (_, off) => { // 經典字寬 5、窄字寬 3，加 1 格間距；尾端留一屏空白
             const c = blank();
             chars.forEach((ch, i) => {
-                const pos = span - off + i * 6; // 直放由下往上捲、橫放由右往左捲
-                draw(c, ch, wide ? pos : 0, wide ? 0 : pos, color ?? hsv((i / Math.max(chars.length, 1)) % 1));
+                const pos = span - off + i * stride; // 直放由下往上捲、橫放由右往左捲
+                draw(c, ch, wide ? pos : compact ? 1 : 0, wide ? 0 : pos, color ?? hsv((i / Math.max(chars.length, 1)) % 1));
             });
             return c;
         });
     };
-    /** 靜態文字：最多 4 個字，每塊方塊一個字（直放由上往下、橫放由左往右），回傳每 4 字一頁的畫面清單 */
+    /** 靜態文字：經典／直放每頁 4 字，窄字橫放每頁 5 字，回傳分頁畫面。 */
     const staticPages = (text, color = null) => {
         const chars = [...text];
         const pages = [];
-        for (let p = 0; p < Math.max(1, Math.ceil(chars.length / 4)); p++) {
-            const c = blank();
-            chars.slice(p * 4, p * 4 + 4).forEach((ch, i) =>
-                draw(c, ch, wide ? i * 5 : 0, wide ? 0 : i * 5, color ?? hsv(((p * 4 + i) / Math.max(chars.length, 1)) % 1)));
+        const capacity = compact && wide ? 5 : 4;
+        for (let p = 0; p < Math.max(1, Math.ceil(chars.length / capacity)); p++) {
+            const c = blank(), part=chars.slice(p*capacity,p*capacity+capacity);
+            const colors=part.map((_,i)=>color ?? hsv(((p*capacity+i)/Math.max(chars.length,1))%1));
+            if(compact && wide) drawLine(c, part.join(""), colors);
+            else part.forEach((ch,i)=>draw(c,ch,wide?i*5:compact?1:0,wide?0:i*5,colors[i]));
             pages.push(c);
         }
         return pages;

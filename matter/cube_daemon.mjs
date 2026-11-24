@@ -43,9 +43,9 @@ export const EFFECTS = {
 };
 const MODES = ["clock", "text", "breathe", "effect", "weather", "image", "off"];
 export const COLOR_FX = { fixed: "固定", flow: "彩虹流動", diagonal: "斜向彩虹", sunset: "夕陽漸層", ocean: "海洋漸層",
-    pulse: "呼吸", sparkle: "閃亮" };
+    pulse: "呼吸", sparkle: "閃亮", honey: "蜜糖暖光", nord: "北歐冰川", dracula: "德古拉霓虹", catppuccin: "奶霜粉彩", synthwave: "復古電光" };
 export const TEXT_FX = { scroll: "捲動", still: "靜止", blink: "閃爍", scrollblink: "捲動＋閃爍" };
-const DEFAULT = { mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", effect: "rainbow",
+const DEFAULT = { font: "classic", mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", effect: "rainbow",
     history: ["WASH DONE", "BUSY", "♥"], timer: null,
     image: null, schedule: { enabled: false, slots: [] }, rest: null };
 const REST_LEVEL = 5, REST_COLOR = "#ff5a00", REPLAY_SECONDS = 60;
@@ -56,6 +56,8 @@ function sanitize(s) {
     if (!MODES.includes(s.mode)) throw new Error(`mode 只能是 ${MODES.join("/")}`);
     if (!ORIENTS.includes(s.orient)) throw new Error(`orient 只能是 ${ORIENTS.join("/")}`);
     if (!(s.effect in EFFECTS)) throw new Error(`effect 只能是 ${Object.keys(EFFECTS).join("/")}`);
+    const font = s.font ?? "classic";
+    if (!["classic", "compact"].includes(font)) throw new Error("font 只能是 classic/compact");
     const text = String(s.text ?? "").toUpperCase().slice(0, 60);
     const bad = [...text].filter(ch => !SUPPORTED_CHARS.includes(ch));
     if (bad.length) throw new Error(`不支援的字：${[...new Set(bad)].join("")}（只支援英文、數字、! ? - . : + < > / ♥）`);
@@ -71,7 +73,7 @@ function sanitize(s) {
     if (!(colorFx in COLOR_FX)) throw new Error(`colorFx 只能是 ${Object.keys(COLOR_FX).join("/")}`);
     const textFx = s.textFx ?? DEFAULT.textFx;
     if (!(textFx in TEXT_FX)) throw new Error(`textFx 只能是 ${Object.keys(TEXT_FX).join("/")}`);
-    return { mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, history, effect: s.effect,
+    return { font, mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, history, effect: s.effect,
         image, schedule: checkSchedule(s.schedule ?? DEFAULT.schedule), rest: checkRest(s.rest), timer: checkTimer(s.timer) };
 }
 /** 倒數：{until(ms), total(秒), paused, remaining(暫停時剩幾毫秒)} */
@@ -498,6 +500,11 @@ function paint(r, canvas, s, t) {
             case "diagonal": col = hsv((((diag - t * 0.05) % 1) + 1) % 1); break; // 顏色一波波往右下流
             case "sunset": col = cyc(SUNSET, diag - t * 0.04); break;
             case "ocean": col = cyc(OCEAN, diag - t * 0.04); break;
+            case "honey": col = cyc([[255,150,35],[255,220,90],[255,183,76]], diag * .6); break;
+            case "nord": col = cyc([[143,188,187],[136,192,208],[129,161,193]], along-t*.015); break;
+            case "dracula": col = cyc([[189,147,249],[255,121,198],[139,233,253]], along-t*.025); break;
+            case "catppuccin": col = cyc([[203,166,247],[245,194,231],[250,179,135],[148,226,213]], along-t*.018); break;
+            case "synthwave": col = cyc([[255,40,150],[130,70,255],[0,225,255]], diag-t*.03); break;
             case "pulse": col = dim(base, 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 0.5))); break;
             case "sparkle": col = noise(x, y, t) > 0.88 ? [255, 255, 255] : base; break;
             default: col = c;
@@ -534,7 +541,7 @@ function textSteps(r, s) {
 }
 /** 預覽：不送燈，回傳前幾格畫面 */
 function previewSteps(s) {
-    const r = renderer(s.orient);
+    const r = renderer(s.orient, s.font);
     let steps;
     if (s.mode === "clock") steps = animated(s) ? [[r.clock(new Date(), [255, 255, 255]), 24 * ANIM_MS]]
         : [[r.clock(new Date(), rgbOf(s.color), rgbOf(s.color2)), 1000]];
@@ -545,7 +552,7 @@ function previewSteps(s) {
     else if (s.mode === "breathe") { const base = rgbOf(s.color) ?? [255, 160, 60];
         steps = Array.from({ length: 14 }, (_, t) => [r.fill(() => dim(base, 0.08 + 0.92 * (0.5 - 0.5 * Math.cos(t * ANIM_MS / 4000 * 2 * Math.PI)))), ANIM_MS]); }
     else if (s.mode === "effect") { const st = Date.now(); steps = Array.from({ length: 24 }, (_, t) => [effectFrame(r, s.effect, t, st), ANIM_MS]); }
-    else steps = [[r.blank(), 1000]];
+    else if (!steps) steps = [[r.blank(), 1000]];
     return { w: r.LW, h: r.LH, frames: steps.slice(0, 80).map(([c, ms]) => ({ pixels: toHex(c), ms })) };
 }
 
@@ -555,7 +562,7 @@ for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, async () => { stopping 
 while (!stopping) {
     const v = version, s = effective();
     if (s.mode === "off" || paused) { await sleep(1000); continue; }
-    const r = renderer(s.orient);
+    const r = renderer(s.orient, s.font);
     if (!(await attempt(enterPixels))) continue;
     const same = () => !stopping && v === version && !paused;
     if (s.mode === "timer") { // 倒數 MMSS：分琥珀、秒青；最後 10 秒全紅；暫停時變暗
