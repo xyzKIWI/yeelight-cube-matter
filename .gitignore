@@ -25,3 +25,5 @@ calendar.env
 private/
 
 .venv/
+
+cube_scenes.json

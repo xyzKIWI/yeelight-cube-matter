@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+import {ScenesStore,sceneSettings} from '../matter/scenes_store.mjs';
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cube-scenes-'));const file=path.join(dir,'scenes.json');
+const normalize=s=>sceneSettings(s);const store=new ScenesStore(file,normalize);
+assert.throws(()=>store.change({action:'save',name:' ',settings:{}}));
+store.change({action:'save',name:'暖色時鐘',settings:{mode:'clock',font:'compact',color:'#ffb74c',colorSpeed:.15,rest:{until:1},schedule:{enabled:true}}});
+const id=store.list()[0].id;assert.equal(store.list()[0].name,'暖色時鐘');
+assert.throws(()=>store.change({action:'save',name:'暖色時鐘',settings:{}}));
+assert.deepEqual(store.change({action:'apply',id}),{mode:'clock',font:'compact',color:'#ffb74c',colorSpeed:.15});
+store.change({action:'rename',id,name:'晚安'});
+const again=new ScenesStore(file,normalize);assert.equal(again.list()[0].name,'晚安');
+again.change({action:'delete',id});assert.equal(new ScenesStore(file,normalize).list().length,0);
+for(let i=0;i<12;i++)again.change({action:'save',name:'收藏'+i,settings:{mode:'clock'}});
+assert.throws(()=>again.change({action:'save',name:'第13筆',settings:{mode:'clock'}}));
+assert.throws(()=>again.change({action:'apply',id:'missing'}));
+fs.rmSync(dir,{recursive:true});console.log('Scene save/rename/delete/apply, persistence, allowlist and limits OK');

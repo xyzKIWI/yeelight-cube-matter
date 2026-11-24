@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ASSETS = Path(__file__).resolve().parent / "assets"
 ICON_VERSION = "20261125a"
 MANIFEST = {
-    "id": "/", "name": "Cube 光盒", "short_name": "Cube 光盒",
+    "id": "/", "name": "Yeelight Cube", "short_name": "Yeelight Cube",
     "lang": "zh-Hant", "start_url": "/", "scope": "/", "display": "standalone",
     "background_color": "#0f172a", "theme_color": "#0f172a",
     "icons": [{"src": f"/assets/icon-{n}.png?v={ICON_VERSION}", "sizes": f"{n}x{n}",
@@ -100,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         except ValueError:
             return self._json(400, {"error": "JSON 格式錯誤"})
-        routes = {"/api/mode": "/mode", "/api/light": "/light", "/api/preview": "/preview", "/api/rest": "/rest", "/api/history": "/history", "/api/timer": "/timer"}
+        routes = {"/api/mode": "/mode", "/api/light": "/light", "/api/preview": "/preview", "/api/rest": "/rest", "/api/history": "/history", "/api/timer": "/timer", "/api/scenes": "/scenes"}
         if self.path in routes:
             return self._json(*daemon_call("POST", routes[self.path], body))
         if self.path == "/api/notify":  # 給 HA 等外部呼叫：{"text":"WASH DONE","seconds":300,"color":"#00ff80"}
@@ -117,15 +117,15 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = r"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Cube 光盒">
+<meta name="apple-mobile-web-app-title" content="Yeelight Cube">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="description" content="Cube 光盒：點陣時鐘、文字、氛圍與日常提醒。">
+<meta name="description" content="Yeelight Cube：點陣時鐘、文字、氛圍與日常提醒。">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/icon-180.png?v=20261125a">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png?v=20261125a">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0F172A">
-<title>Cube 光盒</title>
+<title>Yeelight Cube</title>
 <style>
 :root{--bg:#F4F6FA;--card:#FFFFFF;--muted:#EEF1F6;--fg:#0F172A;--dim:#475569;--line:#D9DEE7;
  --acc:#16A34A;--on-acc:#FFFFFF;--warn:#DC2626;--info:#2563EB;--r:16px}
@@ -140,6 +140,11 @@ header h1{font-size:18px;margin:0;flex:1;letter-spacing:-.4px}
 .brand img{width:38px;height:38px;border-radius:10px;flex:none}
 .brand small{display:block;font-size:10px;font-weight:500;color:var(--dim);letter-spacing:.7px;margin-top:1px}
 @media(display-mode:standalone){html{overscroll-behavior-y:none}body{-webkit-user-select:none;user-select:none}input,textarea{-webkit-user-select:text;user-select:text}}
+@media(max-width:440px){header{display:grid;grid-template-columns:minmax(0,1fr) 64px 48px;gap:6px 8px}.brand{grid-column:1;grid-row:1}header #pw{grid-column:2;grid-row:1}header>.ghost{grid-column:3;grid-row:1}header #conn{grid-column:1/-1;grid-row:2;font-size:11px}.brand h1{font-size:16px;white-space:nowrap}}
+.groups{margin:10px 0;overflow-x:auto}.groups button{min-height:40px;font-size:13px;padding:0 10px;white-space:nowrap}
+.scene-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px}.scene-strip button{flex:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scene-save{display:flex;gap:8px;margin-top:10px}.scene-save input{min-width:0;width:100%;padding:0 10px}.scene-save button{flex:none;font-size:13px;padding:0 10px}
+details summary{font-size:13px;color:var(--dim);cursor:pointer;padding:8px 0}.scene-row{display:flex;gap:6px;margin:8px 0}.scene-row input{min-width:0;width:100%;padding:0 8px}.scene-row button{font-size:12px;flex:none;padding:0 9px}
 .install-note{font-size:13px;line-height:1.7;color:var(--dim)}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--dim)}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--dim)}
@@ -183,6 +188,7 @@ input[type=color]{width:48px;height:48px;border:1px solid var(--line);border-rad
 .bar{height:8px;border-radius:4px;background:var(--muted);overflow:hidden;margin:6px 0 14px}.bar i{display:block;height:100%;background:var(--acc)}
 .flash{display:flex;gap:10px;flex-wrap:wrap}.flash button{width:48px;height:48px;padding:0;border-radius:50%;border:2px solid var(--line)}
 .flash button.on{border:3px solid var(--fg);box-shadow:0 0 0 2px var(--acc)}
+.symbol-keys{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.symbol-keys button{min-width:48px;min-height:44px;font-size:18px;padding:8px 12px}
 .chips{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px}
 .chip{position:relative;display:inline-flex}
 .chip>button:first-child{min-height:44px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 22px 0 14px}
@@ -215,7 +221,7 @@ nav svg{width:24px;height:24px}
 .bad{color:var(--warn)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
-<header><div class="brand"><img src="/assets/icon-180.png?v=20261125a" alt="" width="38" height="38"><h1>Cube 光盒<small>點陣・光・日常</small></h1></div>
+<header><div class="brand"><img src="/assets/icon-180.png?v=20261125a" alt="" width="38" height="38"><h1>Yeelight Cube<small>點陣・光・日常</small></h1></div>
 <span class="chip" id="conn"><span class="dot" id="cdot"></span><span id="ctxt">讀取中</span></span>
 <button class="toggle" id="pw" aria-label="電源" onclick="power()"></button>
 <button class="ghost" aria-label="設定" onclick="sheet(true)" style="min-width:48px;padding:0">
@@ -256,6 +262,9 @@ nav svg{width:24px;height:24px}
 </div>
 <!-- ===== 內容 ===== -->
 <div class="view on" id="v-con">
+ <section id="contentAlert" hidden><div class="row"><strong id="contentAlertText"></strong><button onclick="api('/api/alert-clear',{})">結束插播</button></div><p class="hint">這是通知內容；手動套用會結束插播，並暫停通知 1 分鐘。</p></section>
+ <section class="favorites"><h2>常用情境 <span class="hint" id="sceneCount"></span></h2><div id="sceneList" class="scene-strip"></div>
+ <details><summary>管理收藏</summary><div id="sceneManage"></div></details></section>
  <div class="seg" id="cseg" style="margin-bottom:12px">
   <button data-k="clock">時鐘</button><button data-k="text">文字</button><button data-k="weather">天氣</button>
   <button data-k="timer">計時</button><button data-k="image">像素畫</button><button data-k="mood">氛圍</button></div>
@@ -264,21 +273,29 @@ nav svg{width:24px;height:24px}
   <div><canvas class="led" id="pre" width="60" height="240" aria-label="預覽"></canvas><div class="lbl">預覽</div></div></div>
   <div class="info"><div class="hint">尚未套用</div><div class="big" id="preTitle">—</div>
   <div class="hint" id="preSub"></div>
-  <button class="pri" id="applyBtn" style="margin-top:12px;width:100%" onclick="apply()">套用到燈</button></div></div></section>
- <section data-p="clock"><h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放窄字可顯示 HH:MM，直放數字置中。</p><h2 style="margin-top:14px">時鐘數字顏色</h2><div class="pal" id="pal"></div>
+  <button class="pri" id="applyBtn" style="margin-top:12px;width:100%" onclick="apply()">套用到燈</button><div class="scene-save"><input type="text" id="sceneName" maxlength="20" aria-label="收藏名稱" placeholder="情境名稱，例如夜間時鐘"><button onclick="saveScene()">☆ 收藏預覽</button></div><p class="hint">收藏內容、字型、配色與方向；不包含亮度、倒數與通知。</p></div></div></section>
+ <section data-p="clock"><h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放窄字可顯示 HH:MM，直放數字置中。</p><h2 style="margin-top:14px">時鐘數字顏色</h2><div class="seg groups" id="palGroups" aria-label="配色分組"></div><div class="pal" id="pal"></div>
   <h2 style="margin-top:14px">自訂</h2><div class="row"><input type="color" id="cc1" value="#00c8ff" aria-label="小時顏色" onchange="customClock()"><span class="hint">小時</span>
   <input type="color" id="cc2" value="#ff40a0" aria-label="分鐘顏色" onchange="customClock()"><span class="hint">分鐘</span></div>
   <p class="hint">夜間建議琥珀或夜間紅，最不刺眼。</p>
-  <h2 style="margin-top:14px">顏色變化</h2><div class="cfx" data-cfx></div><p class="hint" data-cfxhint></p></section>
+  <h2 style="margin-top:14px">顏色變化</h2><div class="seg groups" data-cfxgroups aria-label="顏色變化分組"></div><div class="cfx" data-cfx></div><p class="hint" data-cfxhint></p><div data-color-speed-box><h2 style="margin-top:14px">顏色流動速度 <span class="hint" data-color-speed-value></span></h2>
+  <input type="range" min="10" max="150" step="5" value="35" aria-label="顏色流動速度" data-color-speed oninput="setColorSpeed(this.value/100,false)" onchange="setColorSpeed(this.value/100)">
+  <div class="row"><button onclick="setColorSpeed(.15)">很慢</button><button onclick="setColorSpeed(.35)">柔和</button><button onclick="setColorSpeed(.65)">適中</button><button onclick="setColorSpeed(1)">原速</button></div>
+  <p class="hint">只調整換色流動；文字捲動另設。確認預覽後按「套用到燈」。</p></div></section>
  <section data-p="text">
   <h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放窄字一頁最多 5 字；直放維持每塊一字。</p>
   <h2 style="margin-top:14px">文字</h2><input type="text" id="txt" maxlength="60" autocapitalize="characters" placeholder="英文、數字、♥" oninput="onText()">
-  <p class="hint" id="txtHint">支援英文、數字、♥ 與 ! ? - . : + &lt; &gt; /</p>
+  <p class="hint" id="txtHint">支援英文、數字及下方符號；不支援中文與一般 emoji。</p>
+  <h2 style="margin-top:14px">符號與文字表情</h2><div class="seg groups" id="symbolKinds" aria-label="符號或表情"></div><div class="seg groups" id="symbolGroups" aria-label="符號分組"></div><div class="symbol-keys" id="symbolKeys" aria-label="可用符號"></div>
+  <p class="hint">符號插入游標位置；文字表情最多 4 格、整組帶入，按「套用到燈」才送出。</p>
   <div class="hint" style="margin-top:8px">用過的文字（點一下帶入，右上 ✕ 刪除）</div><div class="chips" id="hist"></div>
   <h2>效果</h2><div class="seg" id="fxseg"><button data-v="scroll">捲動</button><button data-v="still">靜止</button><button data-v="blink">閃爍</button><button data-v="scrollblink">捲動＋閃爍</button></div>
   <h2 style="margin-top:14px">顏色</h2><div class="row"><button onclick="draft.color='';renderCfx();preview()">彩虹</button>
    <input type="color" value="#00c8ff" aria-label="自選文字顏色" onchange="draft.color=this.value;renderCfx();preview()"></div>
-  <h2 style="margin-top:14px">顏色變化</h2><div class="cfx" data-cfx></div><p class="hint" data-cfxhint></p>
+  <h2 style="margin-top:14px">顏色變化</h2><div class="seg groups" data-cfxgroups aria-label="顏色變化分組"></div><div class="cfx" data-cfx></div><p class="hint" data-cfxhint></p><div data-color-speed-box><h2 style="margin-top:14px">顏色流動速度 <span class="hint" data-color-speed-value></span></h2>
+  <input type="range" min="10" max="150" step="5" value="35" aria-label="顏色流動速度" data-color-speed oninput="setColorSpeed(this.value/100,false)" onchange="setColorSpeed(this.value/100)">
+  <div class="row"><button onclick="setColorSpeed(.15)">很慢</button><button onclick="setColorSpeed(.35)">柔和</button><button onclick="setColorSpeed(.65)">適中</button><button onclick="setColorSpeed(1)">原速</button></div>
+  <p class="hint">只調整換色流動；文字捲動另設。確認預覽後按「套用到燈」。</p></div>
   <div id="spdBox"><h2 style="margin-top:14px">捲動速度 <span id="spv" class="hint"></span></h2>
    <input id="spd" type="range" min="200" max="800" step="10" value="300" aria-label="捲動速度"
     oninput="spv.textContent=this.value+' 毫秒／格'" onchange="draft.speed=+this.value;preview()"></div></section>
@@ -318,7 +335,7 @@ nav svg{width:24px;height:24px}
 </div>
 </main>
 <div class="sheet" id="sheet" onclick="if(event.target===this)sheet(false)"><div class="panel">
- <h2>加入主畫面</h2><p class="install-note">iPhone：以 Safari 開啟，按「分享 → 加入主畫面」，名稱可用「Cube 光盒」。若已有舊圖示，請移除舊捷徑後重新加入。需連上可存取控制主機的網路。</p>
+ <h2>加入主畫面</h2><p class="install-note">iPhone：以 Safari 開啟，按「分享 → 加入主畫面」，名稱可用「Yeelight Cube」。若已有舊圖示，請移除舊捷徑後重新加入。需連上可存取控制主機的網路。</p>
  <h2 style="margin-top:18px">擺放方向</h2><select id="ori" style="width:100%" onchange="mode({orient:this.value})">
   <option value="up">直放（底座在下）</option><option value="left">橫放（底座在左）</option>
   <option value="right">橫放（底座在右）</option><option value="down">倒放</option></select>
@@ -340,7 +357,12 @@ let S=null, dragging=false, draft={mode:'clock'}, conTab='clock', schedLoaded=fa
 const CLOCK_PAL=[['預設','',''],['暖白','#ffd8a0',''],['琥珀','#ff8a00',''],['夜間紅','#ff2a00',''],
  ['冰藍','#40c8ff',''],['薄荷','#30ffa0',''],['薰衣草','#a070ff',''],['櫻花','#ff5aa0',''],
  ['青＋粉','#00e0ff','#ff40a0'],['金＋白','#ffb000','#ffffff'],['綠＋黃','#30e060','#ffd040'],['紫＋青','#b060ff','#00e0c0'],['蜜糖暖光','#ffb74c','#ffdc5a'],['北歐冰川','#88c0d0','#a3be8c'],['德古拉','#bd93f9','#ff79c6'],['奶霜粉彩','#cba6f7','#94e2d5'],['復古電光','#ff2896','#00e1ff']];
-function renderPal(){$('pal').innerHTML=CLOCK_PAL.map(([n,a,b],i)=>{const h=a||'#ff8c00',m=b||a||'#00aaff';
+let palGroup='精選',fxGroup='基本';
+const PAL_GROUPS={'精選':[0,2,12,13,15],'單色':[1,2,3,4,5,6,7],'雙色':[0,8,9,10,11],'主題':[12,13,14,15,16]};
+const FX_GROUPS={'基本':['fixed','pulse','sparkle'],'流動':['flow','diagonal','sunset','ocean'],'主題':['honey','nord','dracula','catppuccin','synthwave']};
+function renderPal(){const bar=$('palGroups');bar.innerHTML=Object.keys(PAL_GROUPS).map(g=>`<button data-group="${g}" class="${g===palGroup?'on':''}" aria-pressed="${g===palGroup}">${g}</button>`).join('');
+ bar.querySelectorAll('button').forEach(b=>b.onclick=()=>{palGroup=b.dataset.group;renderPal();});
+ $('pal').innerHTML=CLOCK_PAL.map(([n,a,b],i)=>{if(!PAL_GROUPS[palGroup].includes(i))return '';const h=a||'#ff8c00',m=b||a||'#00aaff';
   const on=(draft.color||'')===a&&(draft.color2||'')===b;
   return `<button class="${on?'on':''}" data-i="${i}" aria-pressed="${on}" aria-label="時鐘顏色 ${n}"><span class="dg"><span style="color:${h}">1</span><span style="color:${m}">2</span></span>${n}</button>`;}).join('');
  $('pal').querySelectorAll('button').forEach(b=>b.onclick=()=>{const [,a,c]=CLOCK_PAL[+b.dataset.i];draft.color=a;draft.color2=c;renderPal();renderCfx();preview();});}
@@ -348,12 +370,15 @@ const RB='#ff0000,#ffd000,#00e060,#00c8ff,#8b00ff,#ff40a0';
 const CFX=[['fixed','固定',null],['flow','彩虹流動','linear-gradient(180deg,'+RB+')'],['diagonal','斜向彩虹','linear-gradient(135deg,'+RB+')'],
  ['sunset','夕陽漸層','linear-gradient(135deg,#ff4600,#ff006e,#9600ff)'],['ocean','海洋漸層','linear-gradient(135deg,#00ffbe,#0082ff,#461eff)'],
  ['pulse','呼吸',null],['sparkle','閃亮',null],['honey','蜜糖暖光','linear-gradient(135deg,#ff9623,#ffdc5a)'],['nord','北歐冰川','linear-gradient(135deg,#8fbcbb,#88c0d0,#81a1c1)'],['dracula','德古拉霓虹','linear-gradient(135deg,#bd93f9,#ff79c6,#8be9fd)'],['catppuccin','奶霜粉彩','linear-gradient(135deg,#cba6f7,#f5c2e7,#fab387,#94e2d5)'],['synthwave','復古電光','linear-gradient(135deg,#ff2896,#8246ff,#00e1ff)']];
-function renderCfx(){const base=draft.color||'#ff8c00',cur=draft.colorFx||'fixed';
- document.querySelectorAll('[data-cfx]').forEach(box=>{box.innerHTML=CFX.map(([k,n,g])=>{
+function setColorSpeed(value,update=true){draft.colorSpeed=+value;syncColorSpeed();if(update)preview();}
+function syncColorSpeed(){const value=draft.colorSpeed??.35;document.querySelectorAll('[data-color-speed]').forEach(x=>x.value=Math.round(value*100));document.querySelectorAll('[data-color-speed-value]').forEach(x=>x.textContent=value.toFixed(2)+'×');document.querySelectorAll('[data-color-speed-box]').forEach(x=>x.hidden=['fixed','honey'].includes(draft.colorFx||'fixed'));}
+function renderCfx(){syncColorSpeed();const base=draft.color||'#ff8c00',cur=draft.colorFx||'fixed';
+ document.querySelectorAll('[data-cfxgroups]').forEach(bar=>{bar.innerHTML=Object.keys(FX_GROUPS).map(g=>`<button data-group="${g}" class="${g===fxGroup?'on':''}" aria-pressed="${g===fxGroup}">${g}</button>`).join('');bar.querySelectorAll('button').forEach(b=>b.onclick=()=>{fxGroup=b.dataset.group;renderCfx();});});
+ document.querySelectorAll('[data-cfx]').forEach(box=>{box.innerHTML=CFX.filter(([k])=>FX_GROUPS[fxGroup].includes(k)).map(([k,n,g])=>{
   const bg=g||(k==='pulse'?`radial-gradient(circle,${base},#05070c)`:k==='sparkle'?`radial-gradient(circle at 30% 40%,#fff 2px,transparent 3px),radial-gradient(circle at 70% 65%,#fff 2px,transparent 3px),${base}`:(draft.color||'linear-gradient(90deg,'+RB+')'));
   return `<button class="${k===cur?'on':''}" data-k="${k}" aria-pressed="${k===cur}" aria-label="顏色變化 ${n}"><span class="sw2" style="background:${bg}"></span>${n}</button>`;}).join('');
   box.querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.colorFx=b.dataset.k;renderCfx();preview();});});
- const h=['flow','diagonal','sunset','ocean','honey','nord','dracula','catppuccin','synthwave'].includes(cur)?'這個效果會取代上面選的顏色；燈上每 0.3 秒換一次色。':cur==='fixed'?'':'用上面選的顏色'+(draft.color?'':'（沒選就用橘色）')+'變化。';
+ const h=cur==='honey'?'蜜糖暖光為靜態暖色漸層。':['flow','diagonal','sunset','ocean','nord','dracula','catppuccin','synthwave'].includes(cur)?'這個效果會取代上面選的顏色；流動速度可在下方調整。':cur==='fixed'?'':'用上面選的顏色'+(draft.color?'':'（沒選就用橘色）')+'變化。';
  document.querySelectorAll('[data-cfxhint]').forEach(p=>p.textContent=h);}
 const FLASH=[['綠','#00ff80'],['紅','#ff2020'],['橘','#ff8000'],['黃','#ffd000'],['藍','#2080ff'],['紫','#a040ff'],['粉','#ff40a0'],['白','#ffffff']];
 let flashSel='#00ff80';try{flashSel=localStorage.getItem('cubeFlash')||flashSel;}catch(e){}
@@ -375,6 +400,14 @@ function renderHist(){const h=(S&&S.history)||[];$('hist').innerHTML=h.length?''
   d.lastChild.onclick=async()=>{d.remove();const r=await fetch('/api/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remove:t})});
    if(r.ok){S.history=(await r.json()).history;}toast('已刪除「'+t+'」');};
   $('hist').appendChild(d);});}
+let sceneKey='';
+async function sceneRequest(body){try{const r=await fetch('/api/scenes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.error||r.status);S.scenes=j.scenes;sceneKey='';renderScenes();return j;}catch(e){toast(e.message,4000);return null;}}
+async function saveScene(){if(!S||$('applyBtn').disabled||conTab==='timer')return toast('請先完成有效的內容預覽');const r=await sceneRequest({action:'save',name:$('sceneName').value,settings:{...draft,orient:S.orient}});if(r){$('sceneName').value='';toast('已收藏，燈的畫面未改變');}}
+function renderScenes(){const list=$('sceneList'),manage=$('sceneManage');list.replaceChildren();manage.replaceChildren();const items=S.scenes||[];$('sceneCount').textContent=items.length+'/12';
+ if(!items.length){const t=document.createElement('span');t.className='hint';t.textContent='先調整下方預覽，再按「收藏預覽」';list.append(t);}
+ items.forEach(item=>{const b=document.createElement('button');b.textContent='☆ '+item.name;b.onclick=async()=>{if(await sceneRequest({action:'apply',id:item.id})){pending=Date.now();toast('已套用收藏，等待燈回應');await load();openCon({effect:'mood',breathe:'mood'}[S.mode]||S.mode);}};list.append(b);
+ const row=document.createElement('div');row.className='scene-row';const input=document.createElement('input');input.type='text';input.maxLength=20;input.value=item.name;input.setAttribute('aria-label','收藏名稱 '+item.name);row.append(input);
+ for(const [label,action] of [['改名','rename'],['刪除','delete']]){const btn=document.createElement('button');btn.textContent=label;btn.onclick=async()=>{if(await sceneRequest({action,id:item.id,name:input.value}))toast(action==='delete'?'已刪除收藏':'已改名');};row.append(btn);}manage.append(row);});}
 let histKey='';
 let SLOT_OPTS=[['clock','時鐘'],['weather','天氣'],['image','像素畫'],['off','點陣停止']];
 
@@ -395,7 +428,7 @@ async function api(u,b){toast('傳送中…');
   if(!r.ok){toast('失敗：'+(j.error||r.status),4000);return null;}
   pending=Date.now();toast('已儲存，等待燈回應…',8000);setTimeout(load,600);return j;}
  catch(e){toast('連不到控制台，請確認區域網路連線',4000);return null;}}
-const light=b=>api('/api/light',b), mode=b=>api('/api/mode',b);
+const light=b=>api('/api/light',b), mode=b=>api('/api/mode',{...b,interrupt:!!b.mode});
 function power(){api('/api/light',{on:!(S&&S.light&&S.light.on)});}
 function sheet(on){$('sheet').classList.toggle('on',on);}
 
@@ -411,7 +444,7 @@ function openCon(k){conTab=k;document.querySelectorAll('#cseg button').forEach(x
  if(k==='image')draft={mode:'image',image:null};
  if(k==='mood')draft={mode:'effect',effect:'rainbow'};
  $('pv').hidden=k==='timer';if(k==='timer'){$('tQuick').innerHTML=[1,3,5,10,15,25].map(m=>`<button onclick="timerStart(${m*60})">${m} 分</button>`).join('');renderFlash();tickTimer();return;}
- draft.font=(S&&S.font)||'classic';syncFont();syncFxSeg();renderCfx();preview();}
+ draft.colorSpeed=S?.colorSpeed??.35;draft.font=(S&&S.font)||'classic';syncFont();syncFxSeg();renderCfx();preview();}
 function syncFont(){document.querySelectorAll('[data-font]').forEach(b=>b.classList.toggle('on',b.dataset.font===(draft.font||'classic')));}
 document.querySelectorAll('[data-font]').forEach(b=>b.onclick=()=>{draft.font=b.dataset.font;syncFont();preview();});
 document.querySelectorAll('#fxseg button').forEach(b=>b.onclick=()=>{draft.textFx=b.dataset.v;syncFxSeg();preview();});
@@ -419,6 +452,16 @@ function syncFxSeg(){document.querySelectorAll('#fxseg button').forEach(x=>x.cla
  $('spdBox').hidden=draft.textFx==='blink'||draft.textFx==='still';}
 
 // ---- 文字輸入：即時大寫、標出不支援的字 ----
+let symbolGroup='愛心星光',symbolKind='symbol',shortcutKey='';
+function renderSymbols(){const all=(S&&S.textShortcuts)||{},faces=(S&&S.textFaceGroups)||[];
+ const kinds=$('symbolKinds');kinds.replaceChildren();[['symbol','符號'],['face','文字表情（4 格內）']].forEach(([key,label])=>{const b=document.createElement('button');b.textContent=label;b.classList.toggle('on',symbolKind===key);b.setAttribute('aria-pressed',String(symbolKind===key));b.onclick=()=>{symbolKind=key;renderSymbols();};kinds.append(b);});
+ const groups=Object.fromEntries(Object.entries(all).filter(([key])=>faces.includes(key)===(symbolKind==='face')));if(!groups[symbolGroup])symbolGroup=Object.keys(groups)[0];
+ const bar=$('symbolGroups'),keys=$('symbolKeys');bar.replaceChildren();keys.replaceChildren();
+ Object.keys(groups).forEach(name=>{const b=document.createElement('button');b.textContent=name;b.classList.toggle('on',name===symbolGroup);b.setAttribute('aria-pressed',String(name===symbolGroup));b.onclick=()=>{symbolGroup=name;renderSymbols();};bar.append(b);});
+ (groups[symbolGroup]||[]).forEach(text=>{const b=document.createElement('button');b.textContent=text;b.setAttribute('aria-label','帶入 '+text);b.onclick=()=>{const input=$('txt');if(faces.includes(symbolGroup)){setText(text);return;}
+ const start=input.selectionStart??input.value.length,end=input.selectionEnd??start;
+ const value=input.value.slice(0,start)+text+input.value.slice(end);if(value.length>input.maxLength)return toast('文字最多 60 個字元');
+ input.value=value;input.setSelectionRange(start+text.length,start+text.length);onText();};keys.append(b);});}
 function setText(t){$('txt').value=t;onText();}
 function onText(){const raw=$('txt').value.toUpperCase();const ok=S?S.supportedChars:'';
  const bad=[...new Set([...raw].filter(c=>ok&&!ok.includes(c)))];
@@ -486,6 +529,9 @@ async function load(){try{const r=await fetch('/api/status');S=await r.json();
  if(S.timerDone)$('curMode').textContent='時間到！';
  $('alertCard').hidden=!S.alert;if(S.alert){$('alertTxt').textContent='插播中「'+S.alert.text+'」';
   $('alertLeft').textContent='剩 '+Math.max(0,Math.round((new Date(S.alert.until)-Date.now())/1000))+' 秒，結束後回到'+MODE[S.mode];}
+ $('contentAlert').hidden=!S.alert;$('contentAlertText').textContent=S.alert?'通知插播中「'+S.alert.text+'」':'';
+ const sk=JSON.stringify(S.scenes||[]);if(sk!==sceneKey){sceneKey=sk;renderScenes();}
+ const tk=JSON.stringify(S.textShortcuts||{});if(tk!==shortcutKey){shortcutKey=tk;renderSymbols();}
  const hk=JSON.stringify(S.history||[]);if(hk!==histKey){histKey=hk;renderHist();}
  $('ori').value=S.orient;$('wxNow').textContent=S.weather?(WX[S.weather.icon]||'')+' '+Math.round(S.weather.temp)+'°C':'讀取中';
  if(!$('fx').children.length){$('fx').innerHTML=Object.entries(S.effects).map(([k,v])=>`<button data-e="${k}">${v}</button>`).join('');

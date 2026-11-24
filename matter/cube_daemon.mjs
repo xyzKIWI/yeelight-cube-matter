@@ -23,9 +23,11 @@
 //         到了每個時段的開始時間才切換；中途手動改的設定會維持到下一個時段。
 // 讓步：點陣模式中若偵測到燈被關、或顏色被別處（家庭 App、HA）改掉 → 暫停或停止點陣，不搶回來。
 import http from "node:http";
+import {DEFAULT_COLOR_SPEED, normalizeColorSpeed, colorPhase} from "./color_speed.mjs";
+import {ScenesStore,sceneSettings} from "./scenes_store.mjs";
 import fs from "node:fs";
 import path from "node:path";
-import { renderer, connectLamp, ORIENTS, SUPPORTED_CHARS, hsv, kelvinToRgb, dim } from "./cube_lib.mjs";
+import { renderer, connectLamp, ORIENTS, SUPPORTED_CHARS, TEXT_SHORTCUTS, TEXT_FACE_GROUPS, hsv, kelvinToRgb, dim } from "./cube_lib.mjs";
 
 const STORAGE = process.env.MATTER_STORAGE_PATH;
 if (!STORAGE) { console.error("ERROR 需要設定 MATTER_STORAGE_PATH"); process.exit(1); }
@@ -45,7 +47,7 @@ const MODES = ["clock", "text", "breathe", "effect", "weather", "image", "off"];
 export const COLOR_FX = { fixed: "固定", flow: "彩虹流動", diagonal: "斜向彩虹", sunset: "夕陽漸層", ocean: "海洋漸層",
     pulse: "呼吸", sparkle: "閃亮", honey: "蜜糖暖光", nord: "北歐冰川", dracula: "德古拉霓虹", catppuccin: "奶霜粉彩", synthwave: "復古電光" };
 export const TEXT_FX = { scroll: "捲動", still: "靜止", blink: "閃爍", scrollblink: "捲動＋閃爍" };
-const DEFAULT = { font: "classic", mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", effect: "rainbow",
+const DEFAULT = { font: "classic", mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", colorSpeed: DEFAULT_COLOR_SPEED, effect: "rainbow",
     history: ["WASH DONE", "BUSY", "♥"], timer: null,
     image: null, schedule: { enabled: false, slots: [] }, rest: null };
 const REST_LEVEL = 5, REST_COLOR = "#ff5a00", REPLAY_SECONDS = 60;
@@ -60,7 +62,7 @@ function sanitize(s) {
     if (!["classic", "compact"].includes(font)) throw new Error("font 只能是 classic/compact");
     const text = String(s.text ?? "").toUpperCase().slice(0, 60);
     const bad = [...text].filter(ch => !SUPPORTED_CHARS.includes(ch));
-    if (bad.length) throw new Error(`不支援的字：${[...new Set(bad)].join("")}（只支援英文、數字、! ? - . : + < > / ♥）`);
+    if (bad.length) throw new Error(`不支援的字：${[...new Set(bad)].join("")}（請使用英文、數字或控制台列出的符號）`);
     // 最快 200 毫秒／格：11-24 用 90 毫秒（約每秒 11 次 Matter 指令）後燈離線
     const speed = Math.min(1000, Math.max(200, Number(s.speed) || DEFAULT.speed));
     const color = checkHex(String(s.color ?? "").toLowerCase(), "color");
@@ -71,9 +73,10 @@ function sanitize(s) {
     if (s.mode === "image" && !image) throw new Error("image 模式需要先上傳圖片");
     const colorFx = s.colorFx ?? DEFAULT.colorFx;
     if (!(colorFx in COLOR_FX)) throw new Error(`colorFx 只能是 ${Object.keys(COLOR_FX).join("/")}`);
+    const colorSpeed = normalizeColorSpeed(s.colorSpeed ?? DEFAULT.colorSpeed);
     const textFx = s.textFx ?? DEFAULT.textFx;
     if (!(textFx in TEXT_FX)) throw new Error(`textFx 只能是 ${Object.keys(TEXT_FX).join("/")}`);
-    return { font, mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, history, effect: s.effect,
+    return { font, mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, colorSpeed, history, effect: s.effect,
         image, schedule: checkSchedule(s.schedule ?? DEFAULT.schedule), rest: checkRest(s.rest), timer: checkTimer(s.timer) };
 }
 /** 倒數：{until(ms), total(秒), paused, remaining(暫停時剩幾毫秒)} */
@@ -110,6 +113,15 @@ function loadState() {
 }
 
 let state = loadState();
+const scenes = new ScenesStore(path.join(STORAGE, "cube_scenes.json"), data => {
+    const settings = sceneSettings(sanitize({ ...DEFAULT, ...sceneSettings(data ?? {}) }));
+    if (settings.mode !== "image") delete settings.image;
+    return settings;
+});
+let notificationMuteUntil=0;
+const recentAlerts=new Map();
+function manualTakeover(){alert=null;notificationMuteUntil=Date.now()+60000;version++;}
+
 let version = 0;          // 設定或插播改變就 +1，讓畫面迴圈立刻換內容
 let alert = null;         // {text, until}
 let paused = false;       // 燈被關掉時暫停送畫面
@@ -302,13 +314,20 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "GET" && req.url === "/status") {
             const { image, ...rest } = state; // 像素畫內容太長，狀態只回有沒有
             return send(200, { ...rest, rest: restView(state.rest), timer: timerView(state.timer), timerDone: Date.now() < timerDoneUntil, hasImage: !!image, weather: weatherNow, ...status, paused, effects: EFFECTS, textEffects: TEXT_FX, colorEffects: COLOR_FX,
-                supportedChars: SUPPORTED_CHARS, nextSlot: nextSlot(state.schedule),
+                scenes: scenes.list(), notificationMuteUntil, supportedChars: SUPPORTED_CHARS, textShortcuts: TEXT_SHORTCUTS, textFaceGroups: TEXT_FACE_GROUPS, nextSlot: nextSlot(state.schedule),
                 alert: alertActive() ? { text: alert.text, until: new Date(alert.until).toISOString() } : null });
         }
         if (req.method === "GET" && req.url === "/frame") return send(200, lastFrame ?? { w: 0, h: 0, pixels: [] });
         if (req.method === "POST" && req.url === "/preview") {
             const s = sanitize({ ...state, ...(await readBody(req)) });
             return send(200, previewSteps(s));
+        }
+        if(req.method==="POST" && req.url==="/scenes"){
+            const b=await readBody(req);
+            if(b.action==="apply" && (restActive()||state.timer))throw Error("請先結束補眠或取消倒數，再套用收藏");
+            const settings=scenes.change(b);
+            if(settings){state=sanitize({...state,...settings});manualTakeover();status.yieldReason=null;saveState("套用收藏");}
+            return send(200,{ok:true,scenes:scenes.list()});
         }
         if (req.method === "POST" && req.url === "/timer") {
             const b = await readBody(req), tm = state.timer;
@@ -345,8 +364,9 @@ const server = http.createServer(async (req, res) => {
             return send(200, { ok: true, history: state.history });
         }
         if (req.method === "POST" && req.url === "/mode") {
-            const { rest: _ignore, timer: _ignore2, ...body } = await readBody(req);
+            const { rest: _ignore, timer: _ignore2, interrupt, ...body } = await readBody(req);
             state = sanitize({ ...state, ...body });
+            if(interrupt)manualTakeover();
             if (body.mode === "text" && body.text) state.history = [state.text, ...state.history.filter(t => t !== state.text)].slice(0, 12); // 記下用過的文字
             status.yieldReason = null;
             saveState("設定更新");
@@ -361,10 +381,17 @@ const server = http.createServer(async (req, res) => {
         }
         if (req.method === "POST" && req.url === "/alert") {
             const a = await readBody(req);
-            if (a.clear) { alert = null; version++; log("插播取消"); return send(200, { ok: true, alert: null }); }
+            if (a.clear) { manualTakeover(); log("插播取消"); return send(200, { ok: true, alert: null }); }
             const until = a.seconds !== undefined ? Date.now() + Number(a.seconds) * 1000 : Date.parse(a.until);
             if (!Number.isFinite(until) || until <= Date.now() || until - Date.now() > 2 * 3600e3) throw new Error("until／seconds 要是未來 2 小時內");
             const { text } = sanitize({ ...state, text: a.text });
+            const color=a.color?checkHex(String(a.color).toLowerCase(),"color"):null;
+            if(Date.now()<notificationMuteUntil)return send(200,{ok:true,suppressed:true});
+            for(const [k,at] of recentAlerts)if(Date.now()-at>=300000)recentAlerts.delete(k);
+            const key=JSON.stringify([text,color]);
+            if(recentAlerts.has(key))return send(200,{ok:true,deduplicated:true});
+            if(recentAlerts.size>=100)recentAlerts.delete(recentAlerts.keys().next().value);
+            recentAlerts.set(key,Date.now());
             if (restActive()) { // 補眠中：先存著，醒來再播
                 state.rest.missed = [...state.rest.missed, { text, color: a.color ? checkHex(String(a.color).toLowerCase(), "color") : null, at: new Date().toISOString(),
                     until: a.seconds === undefined ? until : null }].slice(-20);
@@ -488,6 +515,7 @@ function cyc(stops, p) { // 循環漸層：stops 頭尾相接
 const SUNSET = [[255, 70, 0], [255, 0, 110], [150, 0, 255]], OCEAN = [[0, 255, 190], [0, 130, 255], [70, 30, 255]];
 function paint(r, canvas, s, t) {
     if (!animated(s)) return canvas;
+    t = colorPhase(t, s.colorSpeed);
     const base = rgbOf(s.color) ?? [255, 140, 0];
     return canvas.map((row, y) => row.map((c, x) => {
         const k = Math.max(...c) / 255;
@@ -506,7 +534,7 @@ function paint(r, canvas, s, t) {
             case "catppuccin": col = cyc([[203,166,247],[245,194,231],[250,179,135],[148,226,213]], along-t*.018); break;
             case "synthwave": col = cyc([[255,40,150],[130,70,255],[0,225,255]], diag-t*.03); break;
             case "pulse": col = dim(base, 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 0.5))); break;
-            case "sparkle": col = noise(x, y, t) > 0.88 ? [255, 255, 255] : base; break;
+            case "sparkle": col = noise(x, y, Math.floor(t)) > 0.88 ? [255, 255, 255] : base; break;
             default: col = c;
         }
         return dim(col, k);
@@ -518,9 +546,12 @@ function expandSteps(r, s, steps, t0 = 0) {
     if (!animated(s)) return steps;
     const out = []; let t = t0;
     for (const [f, ms] of steps) {
-        if (isBlank(f)) { out.push([f, ms]); continue; }
+        if (isBlank(f)) { out.push([f, ms]); t += ms / ANIM_MS; continue; }
         const n = Math.max(1, Math.round(ms / ANIM_MS));
-        for (let i = 0; i < n; i++) out.push([paint(r, f, s, t++), Math.max(200, ms / n)]); // 捲動速度不變
+        for (let i = 0; i < n; i++) {
+            const duration = Math.max(200, ms / n);
+            out.push([paint(r, f, s, t), duration]); t += duration / ANIM_MS;
+        } // 捲動速度不變
     }
     return out;
 }
@@ -585,12 +616,12 @@ while (!stopping) {
         }
         while (same()) await sleep(200);
     } else if (s.mode === "clock" && animated(s)) { // 會變色的時鐘：每 300 毫秒重畫
-        let lastMinute = "", t = 0;
+        let lastMinute = ""; const colorStartedAt = Date.now();
         while (same()) {
             const t0 = Date.now(), minute = new Date().toISOString().slice(0, 16);
             if (lastMinute && minute !== lastMinute && !(await attempt(enterPixels))) continue;
             lastMinute = minute;
-            if (!(await showFrame(r, paint(r, r.clock(new Date(), [255, 255, 255]), s, t++)))) continue;
+            if (!(await showFrame(r, paint(r, r.clock(new Date(), [255, 255, 255]), s, (Date.now() - colorStartedAt) / ANIM_MS)))) continue;
             await sleep(Math.max(0, ANIM_MS - (Date.now() - t0)));
         }
     } else if (s.mode === "clock") {
@@ -620,7 +651,7 @@ while (!stopping) {
         let t = 0;
         while (same()) {
             const steps = expandSteps(r, s, base, t);
-            t += steps.length;
+            t += steps.reduce((total, [,ms]) => total + ms / ANIM_MS, 0);
             for (const [f, ms] of steps) {
                 if (!same()) break;
                 const t0 = Date.now();

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import {renderer,COMPACT_FONT,SUPPORTED_CHARS} from '../matter/cube_lib.mjs';
+import {renderer,COMPACT_FONT,SUPPORTED_CHARS,TEXT_SHORTCUTS} from '../matter/cube_lib.mjs';
 for(const ch of SUPPORTED_CHARS){assert.ok(COMPACT_FONT[ch]);assert.equal(COMPACT_FONT[ch].length,5);}
+for(const choices of Object.values(TEXT_SHORTCUTS))for(const t of choices)for(const ch of t)assert.ok(SUPPORTED_CHARS.includes(ch),'Unsupported shortcut: '+ch);
 for(const orient of ['up','left','right','down'])for(const font of ['classic','compact']){
  const r=renderer(orient,font),clock=r.clock(new Date('2026-01-01T14:02:00Z'));
  assert.equal(r.encode(clock).length,400);
