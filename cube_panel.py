@@ -188,6 +188,7 @@ input[type=color]{width:48px;height:48px;border:1px solid var(--line);border-rad
 .bar{height:8px;border-radius:4px;background:var(--muted);overflow:hidden;margin:6px 0 14px}.bar i{display:block;height:100%;background:var(--acc)}
 .flash{display:flex;gap:10px;flex-wrap:wrap}.flash button{width:48px;height:48px;padding:0;border-radius:50%;border:2px solid var(--line)}
 .flash button.on{border:3px solid var(--fg);box-shadow:0 0 0 2px var(--acc)}
+.face-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.face-card{display:flex;flex-direction:column;align-items:center;gap:8px;min-height:96px;padding:12px 4px;border:2px solid var(--line)}.face-card.on{border-color:var(--acc);background:var(--muted)}.face-card canvas{max-width:100%;border-radius:6px}
 .symbol-keys{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.symbol-keys button{min-width:48px;min-height:44px;font-size:18px;padding:8px 12px}
 .chips{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px}
 .chip{position:relative;display:inline-flex}
@@ -283,7 +284,7 @@ nav svg{width:24px;height:24px}
   <div class="row"><button onclick="setColorSpeed(.15)">很慢</button><button onclick="setColorSpeed(.35)">柔和</button><button onclick="setColorSpeed(.65)">適中</button><button onclick="setColorSpeed(1)">原速</button></div>
   <p class="hint">只調整換色流動；文字捲動另設。確認預覽後按「套用到燈」。</p></div></section>
  <section data-p="text">
-  <h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放窄字一頁最多 5 字；直放維持每塊一字。</p>
+  <h2>字型</h2><div class="seg fontseg"><button data-font="classic">經典 5×5</button><button data-font="compact">窄字 3×5</button></div><p class="hint">橫放靜止／閃爍文字置中：經典每頁 4 字，窄字 5 字；直放每塊一字。</p>
   <h2 style="margin-top:14px">文字</h2><input type="text" id="txt" maxlength="60" autocapitalize="characters" placeholder="英文、數字、♥" oninput="onText()">
   <p class="hint" id="txtHint">支援英文、數字及下方符號；不支援中文與一般 emoji。</p>
   <h2 style="margin-top:14px">符號與文字表情</h2><div class="seg groups" id="symbolKinds" aria-label="符號或表情"></div><div class="seg groups" id="symbolGroups" aria-label="符號分組"></div><div class="symbol-keys" id="symbolKeys" aria-label="可用符號"></div>
@@ -300,7 +301,7 @@ nav svg{width:24px;height:24px}
    <input id="spd" type="range" min="200" max="800" step="10" value="300" aria-label="捲動速度"
     oninput="spv.textContent=this.value+' 毫秒／格'" onchange="draft.speed=+this.value;preview()"></div></section>
  <section data-p="weather"><h2>天氣</h2><div class="big" id="wxNow">讀取中</div>
-  <p class="hint">依服務設定的座標，每 15 分鐘更新；上到下：天氣圖示、溫度兩位數、C。</p></section>
+  <p class="hint">依服務設定的座標，每 15 分鐘更新；直放由上到下；橫放兩側是圖示與 C，中間氣溫用窄字緊密排列。</p></section>
  <section data-p="timer" id="tRun" hidden><h2>倒數中</h2>
   <div class="tbig" id="tLeft" aria-live="polite">00:00</div><div class="bar"><i id="tBar"></i></div>
   <div class="grid3"><button id="tPause" onclick="timerPause()">暫停</button><button onclick="api('/api/timer',{add:60})">＋1 分</button>
@@ -313,8 +314,10 @@ nav svg{width:24px;height:24px}
   <button class="pri" style="flex:1" onclick="timerStart(+$('tMin').value*60+ +$('tSec').value)">開始</button></div>
   <h2 style="margin-top:16px">時間到閃燈顏色</h2><div class="flash" id="tFlash"></div>
   <p class="hint">最長 99 分 59 秒；燈上顯示「分分秒秒」，最後 10 秒變紅。</p></section>
- <section data-p="image"><h2>像素畫</h2><input type="file" id="pic" accept="image/*" onchange="loadPic()" style="width:100%">
-  <p class="hint">會置中裁切並縮成 5×20 點（橫放為 20×5）。</p></section>
+ <section data-p="image"><h2>像素畫</h2><div class="seg" id="imageTabs" aria-label="像素內容來源"><button data-image-tab="face" onclick="chooseImageTab('face')">像素表情</button><button data-image-tab="upload" onclick="chooseImageTab('upload')">上傳圖片</button></div>
+  <div id="faceBox"><p class="hint">點選圖卡先預覽，按「套用到燈」才送出。橫放是整面大臉；直放四塊各顯示一張小臉。</p><div class="face-grid" id="faceGrid" aria-label="像素表情選單"></div></div>
+  <div id="uploadBox" hidden><label for="pic" style="display:block;margin:12px 0 8px">選擇圖片</label><input type="file" id="pic" accept="image/*" onchange="loadPic()" style="width:100%">
+  <p class="hint">會置中裁切並縮成 5×20 點（橫放為 20×5）。</p></div></section>
  <section data-p="mood"><h2>動畫</h2><div class="grid2" id="fx"></div>
   <h2 style="margin-top:14px">呼吸</h2><div class="row"><input type="color" id="brc" value="#ff9040" aria-label="呼吸顏色">
   <button onclick="draft={mode:'breathe',color:brc.value};preview()">預覽呼吸</button></div></section>
@@ -349,7 +352,7 @@ nav svg{width:24px;height:24px}
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
 const $=id=>document.getElementById(id);
-const MODE={clock:'時鐘',text:'文字',breathe:'呼吸',effect:'動畫',weather:'天氣',image:'像素畫',off:'點陣停止'};
+const MODE={clock:'時鐘',text:'文字',breathe:'呼吸',effect:'動畫',weather:'天氣',image:'像素畫',face:'像素表情',off:'點陣停止'};
 const FX={scroll:'捲動',still:'靜止',blink:'閃爍',scrollblink:'捲動＋閃爍'};
 const WX={sun:'晴',moon:'晴（夜）',partly:'晴時多雲',cloud:'陰',fog:'霧',rain:'雨',snow:'雪',thunder:'雷雨'};
 const SW=['#ff0000','#ff8000','#ffd000','#00e060','#00c8ff','#2050ff','#8b00ff','#ff40a0','#ffffff'];
@@ -378,7 +381,7 @@ function renderCfx(){syncColorSpeed();const base=draft.color||'#ff8c00',cur=draf
   const bg=g||(k==='pulse'?`radial-gradient(circle,${base},#05070c)`:k==='sparkle'?`radial-gradient(circle at 30% 40%,#fff 2px,transparent 3px),radial-gradient(circle at 70% 65%,#fff 2px,transparent 3px),${base}`:(draft.color||'linear-gradient(90deg,'+RB+')'));
   return `<button class="${k===cur?'on':''}" data-k="${k}" aria-pressed="${k===cur}" aria-label="顏色變化 ${n}"><span class="sw2" style="background:${bg}"></span>${n}</button>`;}).join('');
   box.querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.colorFx=b.dataset.k;renderCfx();preview();});});
- const h=cur==='honey'?'蜜糖暖光為靜態暖色漸層。':['flow','diagonal','sunset','ocean','nord','dracula','catppuccin','synthwave'].includes(cur)?'這個效果會取代上面選的顏色；流動速度可在下方調整。':cur==='fixed'?'':'用上面選的顏色'+(draft.color?'':'（沒選就用橘色）')+'變化。';
+ const h=cur==='honey'?'蜜糖暖光為靜態暖色漸層。':['flow','diagonal','sunset','ocean','nord','dracula','catppuccin','synthwave'].includes(cur)?'這個效果會取代上面選的顏色；流動速度可在下方調整。':cur==='fixed'?'':draft.mode==='clock'?'保留小時與分鐘雙色，只改變亮度或亮點。':'用上面選的顏色'+(draft.color?'':'（沒選就用橘色）')+'變化。';
  document.querySelectorAll('[data-cfxhint]').forEach(p=>p.textContent=h);}
 const FLASH=[['綠','#00ff80'],['紅','#ff2020'],['橘','#ff8000'],['黃','#ffd000'],['藍','#2080ff'],['紫','#a040ff'],['粉','#ff40a0'],['白','#ffffff']];
 let flashSel='#00ff80';try{flashSel=localStorage.getItem('cubeFlash')||flashSel;}catch(e){}
@@ -405,7 +408,7 @@ async function sceneRequest(body){try{const r=await fetch('/api/scenes',{method:
 async function saveScene(){if(!S||$('applyBtn').disabled||conTab==='timer')return toast('請先完成有效的內容預覽');const r=await sceneRequest({action:'save',name:$('sceneName').value,settings:{...draft,orient:S.orient}});if(r){$('sceneName').value='';toast('已收藏，燈的畫面未改變');}}
 function renderScenes(){const list=$('sceneList'),manage=$('sceneManage');list.replaceChildren();manage.replaceChildren();const items=S.scenes||[];$('sceneCount').textContent=items.length+'/12';
  if(!items.length){const t=document.createElement('span');t.className='hint';t.textContent='先調整下方預覽，再按「收藏預覽」';list.append(t);}
- items.forEach(item=>{const b=document.createElement('button');b.textContent='☆ '+item.name;b.onclick=async()=>{if(await sceneRequest({action:'apply',id:item.id})){pending=Date.now();toast('已套用收藏，等待燈回應');await load();openCon({effect:'mood',breathe:'mood'}[S.mode]||S.mode);}};list.append(b);
+ items.forEach(item=>{const b=document.createElement('button');b.textContent='☆ '+item.name;b.onclick=async()=>{if(await sceneRequest({action:'apply',id:item.id})){pending=Date.now();toast('已套用收藏，等待燈回應');await load();openCon({effect:'mood',breathe:'mood',face:'image'}[S.mode]||S.mode);}};list.append(b);
  const row=document.createElement('div');row.className='scene-row';const input=document.createElement('input');input.type='text';input.maxLength=20;input.value=item.name;input.setAttribute('aria-label','收藏名稱 '+item.name);row.append(input);
  for(const [label,action] of [['改名','rename'],['刪除','delete']]){const btn=document.createElement('button');btn.textContent=label;btn.onclick=async()=>{if(await sceneRequest({action,id:item.id,name:input.value}))toast(action==='delete'?'已刪除收藏':'已改名');};row.append(btn);}manage.append(row);});}
 let histKey='';
@@ -441,7 +444,7 @@ function openCon(k){conTab=k;document.querySelectorAll('#cseg button').forEach(x
  if(k==='clock'){draft={mode:'clock',color:(S&&S.color)||'',color2:(S&&S.color2)||'',colorFx:(S&&S.colorFx)||'fixed'};renderPal();}
  if(k==='text')draft={mode:'text',text:$('txt').value||(S&&S.text)||'HELLO',textFx:(S&&S.textFx)||'scroll',speed:+$('spd').value,color:(S&&S.mode==='text'&&S.color)||'',colorFx:(S&&S.colorFx)||'fixed'};
  if(k==='weather')draft={mode:'weather'};
- if(k==='image')draft={mode:'image',image:null};
+ if(k==='image'){imageTab=S?.mode==='image'?'upload':'face';draft=imageTab==='face'?{mode:'face',face:S?.face||'cat'}:{mode:'image',image:null};syncImageTab();renderFaces();}
  if(k==='mood')draft={mode:'effect',effect:'rainbow'};
  $('pv').hidden=k==='timer';if(k==='timer'){$('tQuick').innerHTML=[1,3,5,10,15,25].map(m=>`<button onclick="timerStart(${m*60})">${m} 分</button>`).join('');renderFlash();tickTimer();return;}
  draft.colorSpeed=S?.colorSpeed??.35;draft.font=(S&&S.font)||'classic';syncFont();syncFxSeg();renderCfx();preview();}
@@ -469,16 +472,21 @@ function onText(){const raw=$('txt').value.toUpperCase();const ok=S?S.supportedC
  draft.text=raw;$('applyBtn').disabled=!raw||bad.length>0;if(!bad.length&&raw)preview();}
 
 // ---- 預覽：向常駐程式要畫面，在手機上播放，不送燈 ----
-async function preview(){clearTimeout(playTimer);const d={...draft};if(d.mode==='image'&&!d.image){$('preTitle').textContent='請選一張圖片';$('applyBtn').disabled=true;return;}
+let previewVersion=0;
+async function preview(){const requestVersion=++previewVersion;clearTimeout(playTimer);const d={...draft};if(d.mode==='image'&&!d.image){$('preTitle').textContent='請選一張圖片';$('applyBtn').disabled=true;return;}
  if(d.mode==='text'&&!d.text){$('applyBtn').disabled=true;return;}
  $('applyBtn').disabled=false;
- $('preTitle').textContent=MODE[d.mode]+(d.mode==='text'?'「'+d.text+'」':'')+(d.mode==='effect'&&S?'：'+S.effects[d.effect]:'');
+ $('preTitle').textContent=MODE[d.mode]+(d.mode==='text'?'「'+d.text+'」':'')+(d.mode==='effect'&&S?'：'+S.effects[d.effect]:'')+(d.mode==='face'?'：'+(S?.pixelFaces.find(f=>f.id===d.face)?.name||''):'');
  const cf=d.colorFx&&d.colorFx!=='fixed'?CFX.find(c=>c[0]===d.colorFx)[1]:'';
  $('preSub').textContent=[d.mode==='text'?FX[d.textFx||'scroll']:(d.color?'自選顏色':''),cf].filter(Boolean).join(' · ');
- try{const r=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});const p=await r.json();
+ try{const r=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});const p=await r.json();if(requestVersion!==previewVersion)return;
   if(!r.ok){$('preSub').innerHTML='<span class="bad">'+(p.error||'預覽失敗')+'</span>';$('applyBtn').disabled=true;return;}
   let i=0;const play=()=>{const f=p.frames[i%p.frames.length];drawLED($('pre'),{w:p.w,h:p.h,pixels:f.pixels});i++;
    if(p.frames.length>1)playTimer=setTimeout(play,Math.max(f.ms,200));};play();}catch(e){}}
+let imageTab='face',faceCatalogKey='';
+function syncImageTab(){document.querySelectorAll('[data-image-tab]').forEach(b=>{const on=b.dataset.imageTab===imageTab;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});$('faceBox').hidden=imageTab!=='face';$('uploadBox').hidden=imageTab!=='upload';}
+function chooseImageTab(tab){imageTab=tab;draft=tab==='face'?{mode:'face',face:S?.face||'cat'}:{mode:'image',image:null};syncImageTab();renderFaces();preview();}
+function renderFaces(){const grid=$('faceGrid');grid.replaceChildren();for(const face of S?.pixelFaces||[]){const b=document.createElement('button'),cv=document.createElement('canvas'),label=document.createElement('span');b.className='face-card';const on=draft.mode==='face'&&draft.face===face.id;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));b.setAttribute('aria-label','像素表情 '+face.name);cv.setAttribute('aria-hidden','true');label.textContent=face.name;b.append(cv,label);drawLED(cv,face.thumbnail);b.onclick=()=>{draft={mode:'face',face:face.id};renderFaces();preview();};grid.append(b);}}
 function apply(){const d={...draft};if(d.mode==='image'&&!d.image)return;mode(d);}
 
 // ---- 像素畫：手機端縮圖 ----
@@ -514,7 +522,7 @@ async function load(){try{const r=await fetch('/api/status');S=await r.json();
  const L=S.light;$('pw').classList.toggle('on',!!(L&&L.on));$('pw').setAttribute('aria-pressed',!!(L&&L.on));
  if(L&&!dragging){$('br').value=L.level;$('bv').textContent=L.level+'%';if(L.ct){$('ct').value=L.ct;$('cv').textContent=L.ct+'K';}}
  else if(!L)$('bv').textContent='尚未讀取';
- $('curMode').textContent=S.paused?'燈已關':(MODE[S.mode]+(S.mode==='text'?'「'+S.text+'」':'')+(S.mode==='effect'?'：'+S.effects[S.effect]:''));
+ $('curMode').textContent=S.paused?'燈已關':(MODE[S.mode]+(S.mode==='text'?'「'+S.text+'」':'')+(S.mode==='effect'?'：'+S.effects[S.effect]:'')+(S.mode==='face'?'：'+(S.pixelFaces.find(f=>f.id===S.face)?.name||''):''));
  const sub=[];if(S.yieldReason)sub.push(S.yieldReason);if(S.nextSlot)sub.push('下次 '+S.nextSlot.at+' 切換'+(S.nextSlot.mode==='effect'?S.effects[S.nextSlot.effect]:MODE[S.nextSlot.mode]));
  $('curSub').textContent=sub.join(' · ');const cur=S.mode==='effect'?'effect:'+S.effect:S.mode;
  document.querySelectorAll('[data-q]').forEach(b=>b.classList.toggle('pri',b.dataset.q===cur));$('resume').hidden=S.mode!=='off';
@@ -532,6 +540,7 @@ async function load(){try{const r=await fetch('/api/status');S=await r.json();
  $('contentAlert').hidden=!S.alert;$('contentAlertText').textContent=S.alert?'通知插播中「'+S.alert.text+'」':'';
  const sk=JSON.stringify(S.scenes||[]);if(sk!==sceneKey){sceneKey=sk;renderScenes();}
  const tk=JSON.stringify(S.textShortcuts||{});if(tk!==shortcutKey){shortcutKey=tk;renderSymbols();}
+ const fk=JSON.stringify(S.pixelFaces||[]);if(fk!==faceCatalogKey){faceCatalogKey=fk;renderFaces();}
  const hk=JSON.stringify(S.history||[]);if(hk!==histKey){histKey=hk;renderHist();}
  $('ori').value=S.orient;$('wxNow').textContent=S.weather?(WX[S.weather.icon]||'')+' '+Math.round(S.weather.temp)+'°C':'讀取中';
  if(!$('fx').children.length){$('fx').innerHTML=Object.entries(S.effects).map(([k,v])=>`<button data-e="${k}">${v}</button>`).join('');
@@ -547,7 +556,7 @@ async function loadCal(){try{const s=await (await fetch('/api/cal')).json();
 SW.forEach(c=>{const d=document.createElement('button');d.className='sw';d.style.background=c;d.setAttribute('aria-label','整燈顏色 '+c);
  d.onclick=()=>{$('cp').value=c;light({color:c});};$('sw').appendChild(d);});
 load().then(()=>{if(S&&S.text)$('txt').value=S.text;
- openCon(S&&S.timer?'timer':S?({clock:'clock',text:'text',weather:'weather',image:'image',effect:'mood',breathe:'mood'}[S.mode]||'clock'):'clock');});loadFrame();loadCal();
+ openCon(S&&S.timer?'timer':S?({clock:'clock',text:'text',weather:'weather',image:'image',face:'image',effect:'mood',breathe:'mood'}[S.mode]||'clock'):'clock');});loadFrame();loadCal();
 setInterval(load,4000);setInterval(tickTimer,1000);setInterval(loadFrame,1500);setInterval(loadCal,30000);
 </script></body></html>"""
 

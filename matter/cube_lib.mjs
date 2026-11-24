@@ -150,6 +150,70 @@ const EXTRA_SYMBOLS = {
   "'": [
     "00100/00100/00000/00000/00000",
     "010/010/000/000/000"
+  ],
+  "✿": [
+    "01010/10101/01110/10101/01010",
+    "101/010/111/010/101"
+  ],
+  "❀": [
+    "01010/10101/01010/10101/01010",
+    "101/010/101/010/101"
+  ],
+  "✦": [
+    "00100/00100/11111/00100/00100",
+    "010/010/111/010/010"
+  ],
+  "✧": [
+    "00100/01010/10001/01010/00100",
+    "010/101/101/101/010"
+  ],
+  "❄": [
+    "10101/01010/11111/01010/10101",
+    "101/010/111/010/101"
+  ],
+  "☁": [
+    "00000/01100/11110/11111/00000",
+    "000/010/111/111/000"
+  ],
+  "☂": [
+    "01110/11111/00100/10100/01100",
+    "010/111/010/110/110"
+  ],
+  "☃": [
+    "00100/01010/00100/01110/11111",
+    "010/101/010/111/111"
+  ],
+  "♠": [
+    "00100/01110/11111/10101/00100",
+    "010/111/111/101/010"
+  ],
+  "♣": [
+    "00100/01110/10101/01110/00100",
+    "010/111/101/111/010"
+  ],
+  "♦": [
+    "00100/01110/11111/01110/00100",
+    "010/111/111/111/010"
+  ],
+  "♩": [
+    "00100/00100/00100/11100/11100",
+    "010/010/010/110/110"
+  ],
+  "♭": [
+    "10000/10000/11100/10100/11000",
+    "100/100/110/101/110"
+  ],
+  "♯": [
+    "01010/11111/01010/11111/01010",
+    "101/111/101/111/101"
+  ],
+  "◀": [
+    "00001/00111/11111/00111/00001",
+    "001/011/111/011/001"
+  ],
+  "▶": [
+    "10000/11100/11111/11100/10000",
+    "100/110/111/110/100"
   ]
 };
 for (const [ch, [classic, compact]] of Object.entries(EXTRA_SYMBOLS)) {
@@ -198,7 +262,9 @@ export const TEXT_SHORTCUTS = {
     "×",
     "÷",
     "=",
-    "∞"
+    "∞",
+    "◀",
+    "▶"
   ],
   "標點括號": [
     ".",
@@ -271,6 +337,24 @@ export const TEXT_SHORTCUTS = {
     "X_X",
     "O:)",
     "OWO"
+  ],
+  "花朵季節": [
+    "✿",
+    "❀",
+    "✦",
+    "✧",
+    "❄",
+    "☁",
+    "☂",
+    "☃"
+  ],
+  "音符紙牌": [
+    "♠",
+    "♣",
+    "♦",
+    "♩",
+    "♭",
+    "♯"
   ]
 };
 // 天氣圖示（5x5）與顏色
@@ -327,6 +411,13 @@ export function renderer(orient = "up", font = "classic") {
         let x = Math.floor((LW - widths.reduce((a,b)=>a+b,0) - widths.length + 1) / 2);
         [...text].forEach((ch,i)=>{draw(canvas,ch,x,0,colors[i]);x+=widths[i]+1;});
     };
+    const centerText = canvas => {
+        const lit = canvas.flatMap(row => row.flatMap((pixel,x) => pixel.some(Boolean) ? [x] : []));
+        if (!lit.length) return canvas;
+        const lo = Math.min(...lit), hi = Math.max(...lit);
+        const offset = Math.floor((LW - (hi - lo + 1)) / 2) - lo;
+        return canvas.map(row => row.map((_,x) => row[x-offset] ?? [0,0,0]));
+    };
     const encode = canvas => {
         const out = new Uint8Array(MODULES * 25 * 4);
         for (let ly = 0; ly < LH; ly++) for (let lx = 0; lx < LW; lx++) {
@@ -376,7 +467,7 @@ export function renderer(orient = "up", font = "classic") {
             const colors=part.map((_,i)=>color ?? hsv(((p*capacity+i)/Math.max(chars.length,1))%1));
             if(compact && wide) drawLine(c, part.join(""), colors);
             else part.forEach((ch,i)=>draw(c,ch,wide?i*5:compact?1:0,wide?0:i*5,colors[i]));
-            pages.push(c);
+            pages.push(wide ? centerText(c) : c);
         }
         return pages;
     };
@@ -389,6 +480,18 @@ export function renderer(orient = "up", font = "classic") {
         const t = Math.round(tempC);
         const tc = t >= 30 ? [255, 70, 40] : t >= 25 ? [255, 150, 0] : t >= 18 ? [80, 220, 120] : [60, 160, 255];
         const digits = t < 0 ? ["-", String(Math.min(9, -t))] : String(Math.min(99, t)).padStart(2, " ").split("");
+        if (wide) {
+            const place = (rows, left, color) => rows.forEach((row,y) => [...row].forEach((bit,x) => {
+                if (bit === "1") c[y][left+x] = color;
+            }));
+            place(icon.rows, 0, icon.color);
+            const values = digits.filter(d => d !== " ");
+            const start = 5 + Math.floor((10 - (values.length * 3 + values.length - 1)) / 2);
+            values.forEach((digit,i) => place(COMPACT_FONT[digit], start + i * 4, tc));
+            const unit = glyph("C");
+            place(unit, 15 + Math.floor((5 - unit[0].length) / 2), [150,150,150]);
+            return c;
+        }
         const cells = [{ rows: icon.rows, color: icon.color }, ...digits.map(d => ({ rows: glyph(d), color: tc })), { rows: glyph("C"), color: [150, 150, 150] }];
         cells.forEach((cell, i) => cell.rows.forEach((row, dy) => [...row].forEach((bit, dx) => {
             if (bit !== "1") return;

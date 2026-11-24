@@ -23,6 +23,8 @@
 //         到了每個時段的開始時間才切換；中途手動改的設定會維持到下一個時段。
 // 讓步：點陣模式中若偵測到燈被關、或顏色被別處（家庭 App、HA）改掉 → 暫停或停止點陣，不搶回來。
 import http from "node:http";
+import {PIXEL_FACES, FACE_CATALOG, faceImage} from "./pixel_faces.mjs";
+import {clockCanvas, clockPixelAccent} from "./clock_colors.mjs";
 import {DEFAULT_COLOR_SPEED, normalizeColorSpeed, colorPhase} from "./color_speed.mjs";
 import {ScenesStore,sceneSettings} from "./scenes_store.mjs";
 import fs from "node:fs";
@@ -43,11 +45,11 @@ export const EFFECTS = {
     aurora: "極光", fire: "火焰", stars: "星空", rain: "雨滴", sakura: "櫻花飄落", heartbeat: "心跳",
     sunrise: "日出（3 分鐘）", alert: "警示閃爍", sleep: "10 分鐘漸暗後關燈",
 };
-const MODES = ["clock", "text", "breathe", "effect", "weather", "image", "off"];
+const MODES = ["clock", "text", "breathe", "effect", "weather", "image", "face", "off"];
 export const COLOR_FX = { fixed: "固定", flow: "彩虹流動", diagonal: "斜向彩虹", sunset: "夕陽漸層", ocean: "海洋漸層",
     pulse: "呼吸", sparkle: "閃亮", honey: "蜜糖暖光", nord: "北歐冰川", dracula: "德古拉霓虹", catppuccin: "奶霜粉彩", synthwave: "復古電光" };
 export const TEXT_FX = { scroll: "捲動", still: "靜止", blink: "閃爍", scrollblink: "捲動＋閃爍" };
-const DEFAULT = { font: "classic", mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", colorSpeed: DEFAULT_COLOR_SPEED, effect: "rainbow",
+const DEFAULT = { face: "cat", font: "classic", mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", colorSpeed: DEFAULT_COLOR_SPEED, effect: "rainbow",
     history: ["WASH DONE", "BUSY", "♥"], timer: null,
     image: null, schedule: { enabled: false, slots: [] }, rest: null };
 const REST_LEVEL = 5, REST_COLOR = "#ff5a00", REPLAY_SECONDS = 60;
@@ -58,6 +60,8 @@ function sanitize(s) {
     if (!MODES.includes(s.mode)) throw new Error(`mode 只能是 ${MODES.join("/")}`);
     if (!ORIENTS.includes(s.orient)) throw new Error(`orient 只能是 ${ORIENTS.join("/")}`);
     if (!(s.effect in EFFECTS)) throw new Error(`effect 只能是 ${Object.keys(EFFECTS).join("/")}`);
+    const face = s.face ?? "cat";
+    if (typeof face !== "string" || !Object.hasOwn(PIXEL_FACES, face)) throw new Error("不支援的像素表情");
     const font = s.font ?? "classic";
     if (!["classic", "compact"].includes(font)) throw new Error("font 只能是 classic/compact");
     const text = String(s.text ?? "").toUpperCase().slice(0, 60);
@@ -76,7 +80,7 @@ function sanitize(s) {
     const colorSpeed = normalizeColorSpeed(s.colorSpeed ?? DEFAULT.colorSpeed);
     const textFx = s.textFx ?? DEFAULT.textFx;
     if (!(textFx in TEXT_FX)) throw new Error(`textFx 只能是 ${Object.keys(TEXT_FX).join("/")}`);
-    return { font, mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, colorSpeed, history, effect: s.effect,
+    return { face, font, mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, colorSpeed, history, effect: s.effect,
         image, schedule: checkSchedule(s.schedule ?? DEFAULT.schedule), rest: checkRest(s.rest), timer: checkTimer(s.timer) };
 }
 /** 倒數：{until(ms), total(秒), paused, remaining(暫停時剩幾毫秒)} */
@@ -314,7 +318,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "GET" && req.url === "/status") {
             const { image, ...rest } = state; // 像素畫內容太長，狀態只回有沒有
             return send(200, { ...rest, rest: restView(state.rest), timer: timerView(state.timer), timerDone: Date.now() < timerDoneUntil, hasImage: !!image, weather: weatherNow, ...status, paused, effects: EFFECTS, textEffects: TEXT_FX, colorEffects: COLOR_FX,
-                scenes: scenes.list(), notificationMuteUntil, supportedChars: SUPPORTED_CHARS, textShortcuts: TEXT_SHORTCUTS, textFaceGroups: TEXT_FACE_GROUPS, nextSlot: nextSlot(state.schedule),
+                scenes: scenes.list(), pixelFaces: FACE_CATALOG, notificationMuteUntil, supportedChars: SUPPORTED_CHARS, textShortcuts: TEXT_SHORTCUTS, textFaceGroups: TEXT_FACE_GROUPS, nextSlot: nextSlot(state.schedule),
                 alert: alertActive() ? { text: alert.text, until: new Date(alert.until).toISOString() } : null });
         }
         if (req.method === "GET" && req.url === "/frame") return send(200, lastFrame ?? { w: 0, h: 0, pixels: [] });
@@ -520,6 +524,8 @@ function paint(r, canvas, s, t) {
     return canvas.map((row, y) => row.map((c, x) => {
         const k = Math.max(...c) / 255;
         if (k <= 0) return c;
+        if (s.mode === "clock" && ["pulse", "sparkle"].includes(s.colorFx))
+            return clockPixelAccent(c, s.colorFx, t, noise(x, y, Math.floor(t)) > 0.88);
         const along = (r.wide ? x : y) / (r.wide ? r.LW : r.LH);   // 沿長邊
         const diag = (x + y) / (r.LW + r.LH);                       // 左上 → 右下
         let col;
@@ -574,10 +580,11 @@ function textSteps(r, s) {
 function previewSteps(s) {
     const r = renderer(s.orient, s.font);
     let steps;
-    if (s.mode === "clock") steps = animated(s) ? [[r.clock(new Date(), [255, 255, 255]), 24 * ANIM_MS]]
-        : [[r.clock(new Date(), rgbOf(s.color), rgbOf(s.color2)), 1000]];
+    if (s.mode === "clock") steps = animated(s) ? [[clockCanvas(r, s), 24 * ANIM_MS]]
+        : [[clockCanvas(r, s), 1000]];
     else if (s.mode === "weather") steps = [[weatherNow ? r.weather(weatherNow.icon, weatherNow.temp) : r.blank(), 1000]];
     else if (s.mode === "image") steps = [[s.image ? r.picture(s.image) : r.blank(), 1000]];
+    else if (s.mode === "face") steps = [[r.picture(faceImage(s.face, s.orient)), 1000]];
     else if (s.mode === "text") steps = textSteps(r, s);
     if (s.mode === "text" || s.mode === "clock") steps = expandSteps(r, s, steps.slice(0, 80));
     else if (s.mode === "breathe") { const base = rgbOf(s.color) ?? [255, 160, 60];
@@ -621,7 +628,7 @@ while (!stopping) {
             const t0 = Date.now(), minute = new Date().toISOString().slice(0, 16);
             if (lastMinute && minute !== lastMinute && !(await attempt(enterPixels))) continue;
             lastMinute = minute;
-            if (!(await showFrame(r, paint(r, r.clock(new Date(), [255, 255, 255]), s, (Date.now() - colorStartedAt) / ANIM_MS)))) continue;
+            if (!(await showFrame(r, paint(r, clockCanvas(r, s), s, (Date.now() - colorStartedAt) / ANIM_MS)))) continue;
             await sleep(Math.max(0, ANIM_MS - (Date.now() - t0)));
         }
     } else if (s.mode === "clock") {
@@ -630,17 +637,18 @@ while (!stopping) {
             const minute = new Date().toISOString().slice(0, 16);
             if (minute !== lastMinute) {
                 if (lastMinute && !(await attempt(enterPixels))) continue; // 每分鐘重送塗鴉燈效（燈斷電重開後自動恢復）
-                if (await showFrame(r, r.clock(new Date(), rgbOf(s.color), rgbOf(s.color2)))) lastMinute = minute;
+                if (await showFrame(r, clockCanvas(r, s))) lastMinute = minute;
             }
             await sleep(1000);
         }
-    } else if (s.mode === "weather" || s.mode === "image") { // 靜態畫面：每分鐘重送一次（燈重開後自動恢復）
+    } else if (s.mode === "weather" || s.mode === "image" || s.mode === "face") { // 靜態畫面：每分鐘重送一次（燈重開後自動恢復）
         let lastMinute = "";
         while (same()) {
             const minute = new Date().toISOString().slice(0, 16);
             if (minute !== lastMinute) {
                 if (lastMinute && !(await attempt(enterPixels))) continue;
-                const canvas = s.mode === "image" ? r.picture(s.image)
+                const canvas = s.mode === "face" ? r.picture(faceImage(s.face, s.orient))
+                    : s.mode === "image" ? r.picture(s.image)
                     : weatherNow ? r.weather(weatherNow.icon, weatherNow.temp) : r.marquee("...")[0];
                 if (await showFrame(r, canvas)) lastMinute = minute;
             }

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-export const SCENE_FIELDS=['mode','font','text','textFx','orient','speed','color','color2','colorFx','colorSpeed','effect','image'];
+export const SCENE_FIELDS=['mode','face','font','text','textFx','orient','speed','color','color2','colorFx','colorSpeed','effect','image'];
 export const sceneSettings=s=>Object.fromEntries(SCENE_FIELDS.filter(k=>s[k]!==undefined).map(k=>[k,s[k]]));
 export class ScenesStore {
  constructor(file,normalize){this.file=file;this.normalize=normalize;this.items=[];
