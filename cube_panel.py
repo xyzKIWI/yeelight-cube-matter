@@ -100,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         except ValueError:
             return self._json(400, {"error": "JSON 格式錯誤"})
-        routes = {"/api/mode": "/mode", "/api/light": "/light", "/api/preview": "/preview", "/api/rest": "/rest", "/api/history": "/history", "/api/timer": "/timer", "/api/scenes": "/scenes"}
+        routes = {"/api/mode": "/mode", "/api/light": "/light", "/api/preview": "/preview", "/api/rest": "/rest", "/api/history": "/history", "/api/timer": "/timer", "/api/scenes": "/scenes", "/api/peek": "/peek"}
         if self.path in routes:
             return self._json(*daemon_call("POST", routes[self.path], body))
         if self.path == "/api/notify":  # 給 HA 等外部呼叫：{"text":"WASH DONE","seconds":300,"color":"#00ff80"}
@@ -301,6 +301,13 @@ nav svg{width:24px;height:24px}
    <input id="spd" type="range" min="200" max="800" step="10" value="300" aria-label="捲動速度"
     oninput="spv.textContent=this.value+' 毫秒／格'" onchange="draft.speed=+this.value;preview()"></div></section>
  <section data-p="weather"><h2>天氣</h2><div class="big" id="wxNow">讀取中</div>
+  <h2 style="margin-top:14px">天氣輪播</h2>
+  <p class="hint" style="margin:0 0 8px">每隔一段時間，把畫面換成天氣一下，再自動回到原本的畫面。補眠中、倒數中、有通知插播時不會打斷。</p>
+  <div class="row"><strong id="pkState">關閉</strong><button id="pkTog" onclick="peekSet({enabled:!(S.peek&&S.peek.enabled)})">開啟</button></div>
+  <div class="row" style="margin-top:8px"><span>每</span>
+   <select id="pkEvery" onchange="peekSet({every:+this.value})"><option>2</option><option>5</option><option>10</option><option>15</option><option>20</option><option>30</option><option>60</option></select><span>分鐘，顯示</span>
+   <select id="pkSec" onchange="peekSet({seconds:+this.value})"><option>15</option><option>30</option><option>45</option><option>60</option><option>90</option></select><span>秒</span></div>
+  <button style="margin-top:8px" onclick="api('/api/peek',{now:true})">現在看一下天氣</button>
   <p class="hint">依服務設定的座標，每 15 分鐘更新；直放由上到下；橫放兩側是圖示與 C，中間氣溫用窄字緊密排列。</p></section>
  <section data-p="timer" id="tRun" hidden><h2>倒數中</h2>
   <div class="tbig" id="tLeft" aria-live="polite">00:00</div><div class="bar"><i id="tBar"></i></div>
@@ -426,6 +433,7 @@ function drawLED(cv,f){const w=f.w||5,h=f.h||20,px=f.pixels||[];const cell=12,ga
   g.fillStyle=c==='#000000'?'#151a24':c;g.beginPath();g.arc(ox+cell/2,oy+cell/2,cell*0.4,0,7);g.fill();}}
 
 function toast(t,ms=2500){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),ms);}
+function peekSet(o){return api('/api/peek',o);}
 async function api(u,b){toast('傳送中…');
  try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});const j=await r.json();
   if(!r.ok){toast('失敗：'+(j.error||r.status),4000);return null;}
@@ -542,6 +550,8 @@ async function load(){try{const r=await fetch('/api/status');S=await r.json();
  const tk=JSON.stringify(S.textShortcuts||{});if(tk!==shortcutKey){shortcutKey=tk;renderSymbols();}
  const fk=JSON.stringify(S.pixelFaces||[]);if(fk!==faceCatalogKey){faceCatalogKey=fk;renderFaces();}
  const hk=JSON.stringify(S.history||[]);if(hk!==histKey){histKey=hk;renderHist();}
+ if(S.peek){$('pkState').textContent=S.peek.enabled?('每 '+S.peek.every+' 分鐘顯示 '+S.peek.seconds+' 秒'):'關閉';$('pkTog').textContent=S.peek.enabled?'關閉':'開啟';
+  if(document.activeElement!==$('pkEvery'))$('pkEvery').value=S.peek.every;if(document.activeElement!==$('pkSec'))$('pkSec').value=S.peek.seconds;}
  $('ori').value=S.orient;$('wxNow').textContent=S.weather?(WX[S.weather.icon]||'')+' '+Math.round(S.weather.temp)+'°C':'讀取中';
  if(!$('fx').children.length){$('fx').innerHTML=Object.entries(S.effects).map(([k,v])=>`<button data-e="${k}">${v}</button>`).join('');
   $('fx').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft={mode:'effect',effect:b.dataset.e};

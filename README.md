@@ -110,7 +110,8 @@
 
 - **天氣**：設定服務的 `WEATHER_LAT`、`WEATHER_LON` 後，從 Open-Meteo 每 15 分鐘取得天氣圖示與攝氏溫度。未設定座標時不查詢天氣，也不使用預設位置。橫放時圖示與 C 分列兩側，中間氣溫使用 3×5 窄字，數字只留一欄間距並置中；直放保留原來每塊一格的排列。
 - **像素畫**：上傳圖片，置中裁切並縮成直放 5×20／橫放 20×5，先看預覽再套用。
-- **氛圍**：彩虹、派對、燭光、海洋、極光、火焰、星空、雨滴、櫻花飄落、心跳、日出、警示閃爍、漸暗關燈，共 13 種動畫，另有自選色呼吸。
+- **氛圍**：彩虹、派對、燭光、海洋、極光、火焰、星空、雨滴、櫻花飄落、心跳、雪花、月光、薰衣草、薄荷、暖黃閱讀燈、日出、警示閃爍、漸暗關燈，共 18 種動畫，另有自選色呼吸。
+- **天氣輪播**：在「內容 → 天氣」開啟後，每隔 N 分鐘（2–240）把畫面換成天氣 M 秒（10–120），再自動回到原本的畫面。補眠中、倒數中、有通知插播時不會打斷，插播與倒數結束後才補上。也可按「現在看一下天氣」立刻看一次。
 
 ### 方向、排程與外部控制
 
@@ -259,6 +260,8 @@ curl -X POST http://127.0.0.1:8772/mode -H 'Content-Type: application/json' \
 # 倒數、暫停、繼續、加時、取消
 curl -X POST http://127.0.0.1:8772/timer -H 'Content-Type: application/json' -d '{"minutes":5,"flash":"#ff2020"}'
 # 其他 /timer 請求：{"pause":true}、{"resume":true}、{"add":60}、{"cancel":true}
+# 天氣輪播：存設定；{"now":true,"hold":30} 則立刻顯示天氣 30 秒
+curl -X POST http://127.0.0.1:8772/peek -H 'Content-Type: application/json' -d '{"enabled":true,"every":10,"seconds":45}'
 # 補眠；結束時傳 {"stop":true}
 curl -X POST http://127.0.0.1:8772/rest -H 'Content-Type: application/json' -d '{"minutes":240}'
 # 通知插播；清除時傳 {"clear":true}

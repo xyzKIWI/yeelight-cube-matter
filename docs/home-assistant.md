@@ -18,7 +18,7 @@ rest:
       - name: "方塊燈 模式"
         unique_id: yeelight_cube_mode
         value_template: "{{ value_json.mode }}"
-        json_attributes: [text, effect, face, orient, font, color, color2, colorFx, colorSpeed]
+        json_attributes: [text, effect, face, orient, font, color, color2, colorFx, colorSpeed, peek]
       - name: "方塊燈 倒數剩餘"
         unique_id: yeelight_cube_timer_left
         unit_of_measurement: "s"
@@ -45,6 +45,12 @@ rest:
       - name: "方塊燈 補眠中"
         unique_id: yeelight_cube_resting
         value_template: "{{ value_json.rest is not none }}"
+      - name: "方塊燈 天氣輪播"
+        unique_id: yeelight_cube_peek_enabled
+        value_template: "{{ value_json.peek.enabled }}"
+      - name: "方塊燈 天氣顯示中"
+        unique_id: yeelight_cube_peek_active
+        value_template: "{{ value_json.peekActive }}"
 ```
 
 ## 2. 指令
@@ -113,6 +119,18 @@ rest_command:
     method: POST
     content_type: "application/json"
     payload: '{"stop": true}'
+  yeelight_cube_peek:          # 天氣輪播；enabled、every（分鐘）、seconds 存設定；show_now＋hold（秒）立刻看一次
+    url: "http://<控制主機IP>:8771/api/peek"
+    method: POST
+    content_type: "application/json"
+    payload: >-
+      {% set p = {} %}
+      {% if enabled is defined %}{% set p = p | combine({"enabled": enabled | bool}) %}{% endif %}
+      {% if every is defined %}{% set p = p | combine({"every": every | int}) %}{% endif %}
+      {% if seconds is defined %}{% set p = p | combine({"seconds": seconds | int}) %}{% endif %}
+      {% if show_now is defined %}{% set p = p | combine({"now": show_now | bool}) %}{% endif %}
+      {% if hold is defined %}{% set p = p | combine({"hold": hold | int}) %}{% endif %}
+      {{ p | tojson }}
   yeelight_cube_scene:         # 套用收藏情境；id 在控制台「常用情境」的收藏檔裡
     url: "http://<控制主機IP>:8771/api/scenes"
     method: POST
@@ -133,6 +151,10 @@ rest_command:
 | `color_speed` | 顏色變化速度 | 0.1（慢）到 1.5（快） |
 | `font` | 字型 | `classic`、`compact` |
 | `orient` | 擺放方向 | `up`、`down`、`left`、`right` |
+
+### 氛圍與天氣
+
+`yeelight_cube_mode` 傳 `mode: effect` 加 `effect`（`rainbow`、`party`、`candle`、`ocean`、`aurora`、`fire`、`stars`、`rain`、`sakura`、`heartbeat`、`snow`、`moon`、`lavender`、`mint`、`lamp`、`sunrise`）可切氛圍；傳 `mode: weather` 切到常駐天氣。`yeelight_cube_peek` 控制天氣輪播（每 `every` 分鐘顯示 `seconds` 秒），或用 `show_now: true` 搭配 `hold` 立刻看一次。
 
 ## 3. 自動化裡怎麼用
 

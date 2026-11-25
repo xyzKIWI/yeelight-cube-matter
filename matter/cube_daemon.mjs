@@ -43,6 +43,7 @@ const log = (...a) => console.log(new Date().toLocaleString("zh-TW", { timeZone:
 export const EFFECTS = {
     rainbow: "彩虹", party: "派對", candle: "燭光", ocean: "海洋",
     aurora: "極光", fire: "火焰", stars: "星空", rain: "雨滴", sakura: "櫻花飄落", heartbeat: "心跳",
+    snow: "雪花", moon: "月光", lavender: "薰衣草", mint: "薄荷", lamp: "暖黃閱讀燈",
     sunrise: "日出（3 分鐘）", alert: "警示閃爍", sleep: "10 分鐘漸暗後關燈",
 };
 const MODES = ["clock", "text", "breathe", "effect", "weather", "image", "face", "off"];
@@ -50,7 +51,7 @@ export const COLOR_FX = { fixed: "固定", flow: "彩虹流動", diagonal: "斜�
     pulse: "呼吸", sparkle: "閃亮", honey: "蜜糖暖光", nord: "北歐冰川", dracula: "德古拉霓虹", catppuccin: "奶霜粉彩", synthwave: "復古電光" };
 export const TEXT_FX = { scroll: "捲動", still: "靜止", blink: "閃爍", scrollblink: "捲動＋閃爍" };
 const DEFAULT = { face: "cat", font: "classic", mode: "clock", text: "HELLO", textFx: "scroll", orient: "up", speed: 250, color: "", color2: "", colorFx: "fixed", colorSpeed: DEFAULT_COLOR_SPEED, effect: "rainbow",
-    history: ["WASH DONE", "BUSY", "♥"], timer: null,
+    history: ["WASH DONE", "BUSY", "♥"], timer: null, peek: { enabled: false, every: 10, seconds: 45 },
     image: null, schedule: { enabled: false, slots: [] }, rest: null };
 const REST_LEVEL = 5, REST_COLOR = "#ff5a00", REPLAY_SECONDS = 60;
 const rgbOf = hex => hex ? [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) : null;
@@ -81,7 +82,15 @@ function sanitize(s) {
     const textFx = s.textFx ?? DEFAULT.textFx;
     if (!(textFx in TEXT_FX)) throw new Error(`textFx 只能是 ${Object.keys(TEXT_FX).join("/")}`);
     return { face, font, mode: s.mode, text: text || DEFAULT.text, textFx, orient: s.orient, speed, color, color2, colorFx, colorSpeed, history, effect: s.effect,
-        image, schedule: checkSchedule(s.schedule ?? DEFAULT.schedule), rest: checkRest(s.rest), timer: checkTimer(s.timer) };
+        image, schedule: checkSchedule(s.schedule ?? DEFAULT.schedule), rest: checkRest(s.rest), timer: checkTimer(s.timer), peek: checkPeek(s.peek) };
+}
+/** 天氣輪播：每 every 分鐘把畫面換成天氣 seconds 秒，再回到原本的畫面 */
+function checkPeek(p) {
+    const o = p && typeof p === "object" ? p : {};
+    const every = Math.round(Number(o.every ?? DEFAULT.peek.every)), seconds = Math.round(Number(o.seconds ?? DEFAULT.peek.seconds));
+    if (!Number.isFinite(every) || every < 2 || every > 240) throw new Error("輪播間隔要在 2 到 240 分鐘之間");
+    if (!Number.isFinite(seconds) || seconds < 10 || seconds > 120) throw new Error("顯示秒數要在 10 到 120 秒之間");
+    return { enabled: !!o.enabled, every, seconds };
 }
 /** 倒數：{until(ms), total(秒), paused, remaining(暫停時剩幾毫秒)} */
 function checkTimer(t) {
@@ -139,6 +148,8 @@ const ALERT_COLOR = "#ff3030";
 const alertActive = () => alert !== null && Date.now() < alert.until;
 const restActive = () => state.rest !== null;
 let replayQueue = []; // 等著播的通知：補眠結束後補播、或手動操作後 1 分鐘內進來的。{text,color,until(過期時間或 null),dur(播多久 ms)}
+let peekUntil = 0, nextPeekAt = Date.now() + state.peek.every * 60e3; // 天氣輪播：目前顯示到何時、下一次何時
+function startPeek(sec) { peekUntil = Date.now() + sec * 1000; nextPeekAt = Date.now() + state.peek.every * 60e3; version++; log("天氣輪播，顯示", sec, "秒"); }
 let timerDoneUntil = 0, timerDoneColor = "#00ff80"; // 倒數結束後整面閃燈到這個時間、用這個顏色
 const timerLeft = tm => tm.paused ? tm.remaining : tm.until - Date.now();
 const timerView = tm => tm && { left: Math.max(0, Math.ceil(timerLeft(tm) / 1000)), total: tm.total, paused: tm.paused, flash: tm.flash };
@@ -148,6 +159,7 @@ function effective() {
         speed: Math.max(state.speed, 250), colorFx: "fixed", isAlert: true };
     if (state.timer) return { ...state, mode: "timer" }; // 倒數優先於補眠與一般畫面（插播會暫時蓋過，倒數照算）
     if (restActive()) return { ...state, mode: "clock", color: REST_COLOR, color2: "", colorFx: "fixed" }; // 補眠：暖色時鐘，亮度另外調到 5%
+    if (Date.now() < peekUntil && weatherNow && state.mode !== "off" && state.mode !== "weather") return { ...state, mode: "weather", isPeek: true }; // 天氣輪播：暫時換成天氣
     return state;
 }
 
@@ -322,7 +334,7 @@ const server = http.createServer(async (req, res) => {
     try {
         if (req.method === "GET" && req.url === "/status") {
             const { image, ...rest } = state; // 像素畫內容太長，狀態只回有沒有
-            return send(200, { ...rest, rest: restView(state.rest), timer: timerView(state.timer), timerDone: Date.now() < timerDoneUntil, hasImage: !!image, weather: weatherNow, ...status, paused, effects: EFFECTS, textEffects: TEXT_FX, colorEffects: COLOR_FX,
+            return send(200, { ...rest, rest: restView(state.rest), timer: timerView(state.timer), timerDone: Date.now() < timerDoneUntil, peekActive: Date.now() < peekUntil, hasImage: !!image, weather: weatherNow, ...status, paused, effects: EFFECTS, textEffects: TEXT_FX, colorEffects: COLOR_FX,
                 scenes: scenes.list(), pixelFaces: FACE_CATALOG, notificationMuteUntil, supportedChars: SUPPORTED_CHARS, textShortcuts: TEXT_SHORTCUTS, textFaceGroups: TEXT_FACE_GROUPS, nextSlot: nextSlot(state.schedule),
                 alert: alertActive() ? { text: alert.text, until: new Date(alert.until).toISOString() } : null });
         }
@@ -360,6 +372,20 @@ const server = http.createServer(async (req, res) => {
                 saveState(`倒數開始 ${Math.floor(sec / 60)} 分 ${sec % 60} 秒`);
             }
             return send(200, { ok: true, timer: timerView(state.timer) });
+        }
+        if (req.method === "POST" && req.url === "/peek") { // {enabled, every, seconds} 存設定；{now:true, hold:秒} 立刻看一次
+            const { now, hold, ...cfg } = await readBody(req);
+            const prev = state.peek, next = checkPeek({ ...prev, ...cfg });
+            if (now) {
+                if (!weatherNow) throw new Error("還沒有天氣資料（服務需設定天氣座標）");
+                if (restActive()) throw new Error("補眠中不顯示天氣");
+                if (state.mode === "off" || paused) throw new Error("燈沒有在顯示點陣");
+            }
+            state = { ...state, peek: next };
+            if (next.enabled && (!prev.enabled || next.every !== prev.every)) nextPeekAt = Date.now() + next.every * 60e3;
+            if (Object.keys(cfg).length) saveState(`天氣輪播：${next.enabled ? `每 ${next.every} 分鐘顯示 ${next.seconds} 秒` : "關閉"}`);
+            if (now) { const h = hold === undefined ? next.seconds : Math.round(Number(hold)); if (!(h >= 5 && h <= 300)) throw new Error("hold 要在 5 到 300 秒"); startPeek(h); }
+            return send(200, { ok: true, peek: state.peek, active: Date.now() < peekUntil });
         }
         if (req.method === "POST" && req.url === "/rest") {
             const b = await readBody(req);
@@ -450,6 +476,11 @@ setInterval(() => {
         version++;
     }
     if (timerDoneUntil && Date.now() >= timerDoneUntil) { timerDoneUntil = 0; version++; }
+    if (peekUntil && Date.now() >= peekUntil) { peekUntil = 0; version++; }
+    if (state.peek.enabled && !peekUntil && Date.now() >= nextPeekAt) {
+        if (restActive() || paused || state.mode === "off" || state.mode === "weather") nextPeekAt = Date.now() + state.peek.every * 60e3; // 補眠、關燈、本來就是天氣：這一輪跳過
+        else if (weatherNow && !alertActive() && !state.timer && Date.now() >= timerDoneUntil) startPeek(state.peek.seconds); // 插播、倒數中先等，結束後馬上補上
+    }
     if (alert === null && replayQueue.length && !restActive() && state.mode !== "off" && Date.now() >= notificationMuteUntil) {
         const now = Date.now();
         replayQueue = replayQueue.filter(m => !m.until || m.until > now); // 行事曆那種已經過時的就不播
@@ -486,6 +517,19 @@ function effectFrame(r, name, t, startedAt) {
             const tw = 0.15 + 0.85 * (0.5 + 0.5 * Math.sin(t * 0.6 + k * 40));
             return dim(k > 0.95 ? [255, 220, 160] : [200, 220, 255], tw);
         });
+        case "snow": { // 雪花：淺藍白點慢慢落
+            const cycle = r.LH + 6, step = Math.floor(t / 3);
+            return r.fill((x, y) => {
+                for (const k of [1, 2]) {
+                    if ((step + Math.floor(rnd(x, k, 7) * cycle * 2)) % cycle === y) return rnd(x, k, 3) > 0.5 ? [235, 244, 255] : [170, 205, 255];
+                }
+                return [0, 2, 12];
+            });
+        }
+        case "moon": return r.fill(() => dim([150, 172, 255], 0.30 + 0.07 * Math.sin(t * ANIM_MS / 9000 * 2 * Math.PI))); // 月光：冷白藍微微起伏
+        case "lavender": return r.fill(() => dim([175, 110, 255], 0.12 + 0.5 * (0.5 - 0.5 * Math.cos(t * ANIM_MS / 9000 * 2 * Math.PI))));
+        case "mint": return r.fill(() => dim([90, 255, 200], 0.12 + 0.5 * (0.5 - 0.5 * Math.cos(t * ANIM_MS / 9000 * 2 * Math.PI))));
+        case "lamp": return r.fill(() => dim([255, 170, 70], 0.55 + 0.04 * Math.sin(t * ANIM_MS / 7000 * 2 * Math.PI))); // 暖黃閱讀燈：穩定的暖光
         case "rain": case "sakura": { // 雨：藍色長水滴；櫻花：粉色花瓣慢慢落
             const rain = name === "rain", len = rain ? 3 : 1, step = rain ? t : Math.floor(t / 2), cycle = r.LH + 6;
             return r.fill((x, y) => {
