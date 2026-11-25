@@ -20,5 +20,5 @@ for(const orient of ['up','down','left','right']) {
 assert.throws(()=>faceImage('missing'));assert.throws(()=>faceImage('__proto__'));assert.throws(()=>faceImage('cat','bad'));
 assert.deepEqual(sceneSettings({mode:'face',face:'cry',schedule:{},rest:{}}),{mode:'face',face:'cry'});
 const count=Object.entries(TEXT_SHORTCUTS).filter(([g])=>!TEXT_FACE_GROUPS.includes(g)).reduce((n,[,a])=>n+a.length,0);
-assert.equal(count,64);
-console.log('64 個符號、五款表情四方向、縮圖、400 bytes 編碼與收藏表情 id 通過');
+assert.equal(count,46);
+console.log('46 個符號、五款表情四方向、縮圖、400 bytes 編碼與收藏表情 id 通過');

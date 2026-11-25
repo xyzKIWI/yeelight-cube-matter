@@ -263,7 +263,7 @@ nav svg{width:24px;height:24px}
 </div>
 <!-- ===== 內容 ===== -->
 <div class="view on" id="v-con">
- <section id="contentAlert" hidden><div class="row"><strong id="contentAlertText"></strong><button onclick="api('/api/alert-clear',{})">結束插播</button></div><p class="hint">這是通知內容；手動套用會結束插播，並暫停通知 1 分鐘。</p></section>
+ <section id="contentAlert" hidden><div class="row"><strong id="contentAlertText"></strong><button onclick="api('/api/alert-clear',{})">結束插播</button></div><p class="hint">這是通知內容；手動套用會結束插播，之後 1 分鐘內進來的通知會排隊，時間到再播。</p></section>
  <section class="favorites"><h2>常用情境 <span class="hint" id="sceneCount"></span></h2><div id="sceneList" class="scene-strip"></div>
  <details><summary>管理收藏</summary><div id="sceneManage"></div></details></section>
  <div class="seg" id="cseg" style="margin-bottom:12px">

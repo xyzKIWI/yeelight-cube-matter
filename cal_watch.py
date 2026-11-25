@@ -103,7 +103,9 @@ def main():
             if key in state["notified"]:
                 continue
             text = "NEXT " + start.astimezone(TPE).strftime("%H:%M")
-            post_alert(text, start)
+            r = post_alert(text, start)
+            if r.get("suppressed") or r.get("ok") is False:
+                break  # 燈這次沒收下，不記成已提醒，下一輪再送
             state["notified"][key] = start.isoformat()
             sent.append(f"{cal_name} {start.astimezone(TPE):%H:%M}")
             break  # 一次只插播最近的一個

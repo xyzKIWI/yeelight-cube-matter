@@ -12,4 +12,4 @@ for(const key of TEXT_FACE_GROUPS)for(const face of TEXT_SHORTCUTS[key]){
  }
 }
 for(const font of [COMPACT_FONT])for(const ch of Object.values(TEXT_SHORTCUTS).flat().join(''))assert.ok(font[ch],ch);
-console.log('顏色速度範圍、慢速相位、50 組四格表情與所有方向單頁顯示通過');
+console.log('顏色速度範圍、慢速相位、22 組表情與所有方向單頁顯示通過');

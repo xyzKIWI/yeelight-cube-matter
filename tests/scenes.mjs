@@ -14,4 +14,11 @@ again.change({action:'delete',id});assert.equal(new ScenesStore(file,normalize).
 for(let i=0;i<12;i++)again.change({action:'save',name:'收藏'+i,settings:{mode:'clock'}});
 assert.throws(()=>again.change({action:'save',name:'第13筆',settings:{mode:'clock'}}));
 assert.throws(()=>again.change({action:'apply',id:'missing'}));
+// 收藏檔壞掉：整檔壞→空白收藏不丟例外；單筆壞→只略過那筆；兩種都留下原檔備份
+const warns=[];const warn=m=>warns.push(m);
+fs.writeFileSync(file,'{not json');assert.equal(new ScenesStore(file,normalize,warn).list().length,0);
+fs.writeFileSync(file,JSON.stringify([{id:'a',name:'好的',settings:{mode:'clock'}},{id:'b',name:'',settings:{}},null,{id:'c',name:'壞模式',settings:{mode:'bad'}}]));
+const strict=s=>{const v=sceneSettings(s??{});if(!['clock','face'].includes(v.mode))throw Error('bad');return v;};
+const partial=new ScenesStore(file,strict,warn);assert.deepEqual(partial.list().map(x=>x.name),['好的']);
+assert.equal(warns.length,2);assert.equal(fs.readdirSync(dir).filter(f=>f.includes('.bad-')).length,2);
 fs.rmSync(dir,{recursive:true});console.log('Scene save/rename/delete/apply, persistence, allowlist and limits OK');

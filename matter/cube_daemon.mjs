@@ -118,10 +118,14 @@ function loadState() {
 
 let state = loadState();
 const scenes = new ScenesStore(path.join(STORAGE, "cube_scenes.json"), data => {
-    const settings = sceneSettings(sanitize({ ...DEFAULT, ...sceneSettings(data ?? {}) }));
+    // 只留收藏時真的有存的欄位；沒存的（例如字型、配色）套用時維持燈上現況，不被預設值蓋掉
+    const saved = sceneSettings(data && typeof data === "object" ? data : {});
+    if (!saved.mode) throw new Error("收藏內容缺少模式");
+    const full = sanitize({ ...DEFAULT, ...saved });
+    const settings = Object.fromEntries(Object.keys(saved).map(k => [k, full[k]]));
     if (settings.mode !== "image") delete settings.image;
     return settings;
-});
+}, msg => log("WARN", msg));
 let notificationMuteUntil=0;
 const recentAlerts=new Map();
 function manualTakeover(){alert=null;notificationMuteUntil=Date.now()+60000;version++;}
@@ -134,7 +138,7 @@ const status = { lastOkAt: null, lastError: null, fails: 0, startedAt: new Date(
 const ALERT_COLOR = "#ff3030";
 const alertActive = () => alert !== null && Date.now() < alert.until;
 const restActive = () => state.rest !== null;
-let replayQueue = []; // 補眠結束後要補播的通知
+let replayQueue = []; // 等著播的通知：補眠結束後補播、或手動操作後 1 分鐘內進來的。{text,color,until(過期時間或 null),dur(播多久 ms)}
 let timerDoneUntil = 0, timerDoneColor = "#00ff80"; // 倒數結束後整面閃燈到這個時間、用這個顏色
 const timerLeft = tm => tm.paused ? tm.remaining : tm.until - Date.now();
 const timerView = tm => tm && { left: Math.max(0, Math.ceil(timerLeft(tm) / 1000)), total: tm.total, paused: tm.paused, flash: tm.flash };
@@ -309,7 +313,8 @@ async function endRest(reason) {
     saveState(`補眠結束（${reason}），錯過 ${missed.length} 則`);
     if (prevLevel) await attempt(() => light({ level: prevLevel }));
     const now = Date.now(); // 行事曆那種「到某時刻為止」的通知，過期就不補播
-    replayQueue = missed.filter(m => !m.until || m.until > now).map(m => ({ text: m.text, color: m.color }));
+    replayQueue = [...replayQueue, ...missed.filter(m => !m.until || m.until > now)
+        .map(m => ({ text: m.text, color: m.color, until: m.until ?? null, dur: REPLAY_SECONDS * 1000 }))].slice(-20);
 }
 setInterval(() => { if (state.rest && Date.now() >= state.rest.until) endRest("時間到").catch(e => log("ERROR", e?.message)); }, 5000);
 const server = http.createServer(async (req, res) => {
@@ -390,7 +395,6 @@ const server = http.createServer(async (req, res) => {
             if (!Number.isFinite(until) || until <= Date.now() || until - Date.now() > 2 * 3600e3) throw new Error("until／seconds 要是未來 2 小時內");
             const { text } = sanitize({ ...state, text: a.text });
             const color=a.color?checkHex(String(a.color).toLowerCase(),"color"):null;
-            if(Date.now()<notificationMuteUntil)return send(200,{ok:true,suppressed:true});
             for(const [k,at] of recentAlerts)if(Date.now()-at>=300000)recentAlerts.delete(k);
             const key=JSON.stringify([text,color]);
             if(recentAlerts.has(key))return send(200,{ok:true,deduplicated:true});
@@ -400,6 +404,11 @@ const server = http.createServer(async (req, res) => {
                 state.rest.missed = [...state.rest.missed, { text, color: a.color ? checkHex(String(a.color).toLowerCase(), "color") : null, at: new Date().toISOString(),
                     until: a.seconds === undefined ? until : null }].slice(-20);
                 persist(); log("補眠中，通知先存著：", text);
+                return send(200, { ok: true, deferred: true });
+            }
+            if (Date.now() < notificationMuteUntil) { // 剛手動操作過：不立刻插播，排隊等 1 分鐘到了再播
+                replayQueue = [...replayQueue, { text, color, until: a.seconds === undefined ? until : null, dur: until - Date.now() }].slice(-20);
+                log("剛手動操作，通知排隊稍後播：", text);
                 return send(200, { ok: true, deferred: true });
             }
             alert = { text, until, color: a.color ? checkHex(String(a.color).toLowerCase(), "color") : null };
@@ -441,10 +450,14 @@ setInterval(() => {
         version++;
     }
     if (timerDoneUntil && Date.now() >= timerDoneUntil) { timerDoneUntil = 0; version++; }
-    if (alert === null && replayQueue.length && !restActive() && state.mode !== "off") {
+    if (alert === null && replayQueue.length && !restActive() && state.mode !== "off" && Date.now() >= notificationMuteUntil) {
+        const now = Date.now();
+        replayQueue = replayQueue.filter(m => !m.until || m.until > now); // 行事曆那種已經過時的就不播
         const m = replayQueue.shift();
-        alert = { text: m.text, color: m.color, until: Date.now() + REPLAY_SECONDS * 1000 };
-        version++; log("補播", m.text);
+        if (m) {
+            alert = { text: m.text, color: m.color, until: now + Math.min(m.dur ?? REPLAY_SECONDS * 1000, m.until ? m.until - now : Infinity) };
+            version++; log("補播", m.text);
+        }
     }
 }, 1000);
 
