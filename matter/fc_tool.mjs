@@ -1,4 +1,4 @@
-// Raw Yeelight vendor-cluster invoker for the cube lamp (node 4242), reusing the shell-0 fabric.
+// Raw vendor-cluster invoker for the cube lamp (node 4242), reusing the shell-0 fabric.
 // usage: node fc_tool.mjs <clusterHex> <commandHex> [hexTLVfields|-] [endpoint]
 import "@matter/nodejs";
 import { Environment, StorageService, Bytes } from "@matter/general";

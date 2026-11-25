@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Yeelight 方塊燈網頁控制台（手機優先）。
+"""CubeLight 網頁控制台（手機優先）。
 
 只用 Python 內建模組。所有控制都轉給 matter/cube_daemon.mjs（Matter 常駐程式）：
 整燈開關／亮度／顏色／色溫走 Matter 標準指令（家庭 App 會同步），其餘畫在點陣上。
@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ASSETS = Path(__file__).resolve().parent / "assets"
 ICON_VERSION = "20261125a"
 MANIFEST = {
-    "id": "/", "name": "Yeelight Cube", "short_name": "Yeelight Cube",
+    "id": "/", "name": "CubeLight", "short_name": "CubeLight",
     "lang": "zh-Hant", "start_url": "/", "scope": "/", "display": "standalone",
     "background_color": "#0f172a", "theme_color": "#0f172a",
     "icons": [{"src": f"/assets/icon-{n}.png?v={ICON_VERSION}", "sizes": f"{n}x{n}",
@@ -117,15 +117,15 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = r"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Yeelight Cube">
+<meta name="apple-mobile-web-app-title" content="CubeLight">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="description" content="Yeelight Cube：點陣時鐘、文字、氛圍與日常提醒。">
+<meta name="description" content="CubeLight：點陣時鐘、文字、氛圍與日常提醒。">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/icon-180.png?v=20261125a">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png?v=20261125a">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0F172A">
-<title>Yeelight Cube</title>
+<title>CubeLight</title>
 <style>
 :root{--bg:#F4F6FA;--card:#FFFFFF;--muted:#EEF1F6;--fg:#0F172A;--dim:#475569;--line:#D9DEE7;
  --acc:#16A34A;--on-acc:#FFFFFF;--warn:#DC2626;--info:#2563EB;--r:16px}
@@ -222,7 +222,7 @@ nav svg{width:24px;height:24px}
 .bad{color:var(--warn)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
-<header><div class="brand"><img src="/assets/icon-180.png?v=20261125a" alt="" width="38" height="38"><h1>Yeelight Cube<small>點陣・光・日常</small></h1></div>
+<header><div class="brand"><img src="/assets/icon-180.png?v=20261125a" alt="" width="38" height="38"><h1>CubeLight<small>點陣・光・日常</small></h1></div>
 <span class="chip" id="conn"><span class="dot" id="cdot"></span><span id="ctxt">讀取中</span></span>
 <button class="toggle" id="pw" aria-label="電源" onclick="power()"></button>
 <button class="ghost" aria-label="設定" onclick="sheet(true)" style="min-width:48px;padding:0">
@@ -338,7 +338,7 @@ nav svg{width:24px;height:24px}
 </div>
 </main>
 <div class="sheet" id="sheet" onclick="if(event.target===this)sheet(false)"><div class="panel">
- <h2>加入主畫面</h2><p class="install-note">iPhone：以 Safari 開啟，按「分享 → 加入主畫面」，名稱可用「Yeelight Cube」。若已有舊圖示，請移除舊捷徑後重新加入。需連上可存取控制主機的網路。</p>
+ <h2>加入主畫面</h2><p class="install-note">iPhone：以 Safari 開啟，按「分享 → 加入主畫面」，名稱可用「CubeLight」。若已有舊圖示，請移除舊捷徑後重新加入。需連上可存取控制主機的網路。</p>
  <h2 style="margin-top:18px">擺放方向</h2><select id="ori" style="width:100%" onchange="mode({orient:this.value})">
   <option value="up">直放（底座在下）</option><option value="left">橫放（底座在左）</option>
   <option value="right">橫放（底座在右）</option><option value="down">倒放</option></select>
@@ -562,7 +562,7 @@ setInterval(load,4000);setInterval(tickTimer,1000);setInterval(loadFrame,1500);s
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Yeelight 方塊燈網頁控制台")
+    ap = argparse.ArgumentParser(description="CubeLight 網頁控制台")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--lan", action="store_true", help="讓同網路的手機也能開（不設密碼）")
     a = ap.parse_args()

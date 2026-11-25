@@ -1,4 +1,4 @@
-// Yeelight Cube 像素顯示（指令列版）：時鐘、跑馬燈。常駐版見 cube_daemon.mjs。
+// CubeLight 像素顯示（指令列版）：時鐘、跑馬燈。常駐版見 cube_daemon.mjs。
 //
 // 用法：
 //   MATTER_STORAGE_PATH=~/.matter-yeelight node cube_pixels.mjs clock

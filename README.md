@@ -1,4 +1,6 @@
-# Yeelight Cube · Matter 控制台
+# CubeLight · Matter 控制台
+
+> 非官方專案，與 Yeelight 無關。Yeelight 及相關名稱為其所有者的商標，這裡僅用來說明相容的設備。
 
 透過 Matter 直接控制 Yeelight Cube 的點陣像素，提供手機網頁控制台、時鐘、文字、天氣、倒數計時與通知插播。
 
@@ -125,7 +127,7 @@
 
 ## 桌面圖示與名稱
 
-網站與主畫面名稱為 **Yeelight Cube**，使用原創點陣方塊圖示；已提供 Apple touch icon、favicon、192／512 px manifest 圖示和獨立視窗顯示設定。
+網站與主畫面名稱為 **CubeLight**，使用原創點陣方塊圖示；已提供 Apple touch icon、favicon、192／512 px manifest 圖示和獨立視窗顯示設定。
 iPhone 在 Safari 重新開啟頁面，按「分享 → 加入主畫面」。已有黑底文字舊圖示時，先移除舊捷徑再重新加入；瀏覽器不一定會更新已保存的圖示。名稱可在加入時自行改寫。
 
 內網 HTTP 仍需連到控制主機；這是主畫面網頁 App 外觀，不含離線控制或推播。HTTPS 環境下的完整 PWA 安裝與離線機制未實作。
@@ -277,14 +279,20 @@ curl -X POST http://127.0.0.1:8772/alert -H 'Content-Type: application/json' \
 ## Matter 協定與相容性
 
 - 端點 1：標準 OnOff `0x0006`、LevelControl `0x0008`、ColorControl `0x0300`。
-- 端點 2：Yeelight 自訂 cluster `0x1312FC03`。
-- `setEffect 0x13120000`：TLV `{0:{0:36,1:0},1:true}` 切到塗鴉效果 36。
-- `setData 0x13120007`：TLV `{0:octstr}`，4 塊 × 25 顆 × `[A,R,G,B]`，共 400 bytes。
+- 端點 2：點陣畫面走裝置的廠商自訂擴充指令（常數與格式見 [cube_lib.mjs](matter/cube_lib.mjs)）：先切到自訂效果，再送整面像素，4 塊 × 25 顆 × `[A,R,G,B]`，共 400 bytes。
 - 第 0 塊接底座，每塊由右下角向左數，再往上一排；方向轉換由 renderer 處理。
 
-協定來自 App 靜態分析與實機驗證；不同韌體的 cluster 和指令可能不同。並非所有 Cube 都適用區網 JSON 的 `update_leds`，本專案使用 Matter，不依賴 TCP 55443。
+指令格式經實機驗證；不同韌體可能不同。並非所有 Cube 都適用區網 JSON 的 `update_leds`，本專案使用 Matter，不依賴 TCP 55443。
 
 恢復原廠設定後，需重新建立配對。先停止使用該控制器的所有程式，把舊憑證目錄離線備份，再依首次配對步驟建立新控制器；不要把失效的舊憑證與新配對混用。
+
+## 接入 Home Assistant
+
+感測器、倒數、補眠、通知與時鐘外觀設定的 HA 範例見 [docs/home-assistant.md](docs/home-assistant.md)。
+
+## 授權
+
+MIT License，詳見 [LICENSE](LICENSE)。這是非官方專案，與 Yeelight 無關。
 
 ## 檔案與隱私
 
